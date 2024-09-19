@@ -1,0 +1,11 @@
+default:
+  deploy:
+    parameters:
+      stack_name: dd-app
+      resolve_s3: true
+      s3_prefix: dd-app
+      region: us-west-1
+      confirm_changeset: true
+      capabilities: CAPABILITY_IAM
+      image_repositories: []
+version: 0.1
