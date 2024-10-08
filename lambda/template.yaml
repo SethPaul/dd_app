@@ -1,0 +1,143 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform:
+  - AWS::Serverless-2016-10-31
+Description: Lambda function and API Gateway setup for D&D Dungeon Master backend.
+
+Resources:
+
+  # DynamoDB Table
+  DDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: DungeonsAndDragonsSessions
+      AttributeDefinitions:
+        - AttributeName: SessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: SessionId
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
+  # IAM Role for Lambda
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: DungeonMasterLambdaExecutionRole
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: LambdaDynamoDBPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource: "*"
+        - PolicyName: LambdaLogsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: 'arn:aws:logs:*:*:*'
+        - PolicyName: AccessSecret
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:dd_open_ai_key
+
+
+  # Lambda Function
+  DungeonMasterLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: DungeonMasterLambda
+      Handler: handler.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Runtime: python3.12
+      CodeUri: ./src/
+      Timeout: 15
+      # Environment:
+      #   Variables:
+      #     OPENAI_API_KEY: YOUR_OPENAI_API_KEY  # Replace with your OpenAI API key
+
+  # API Gateway Rest API
+  DungeonMasterApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: DungeonMasterApi
+
+  # API Gateway Resource ({id})
+  DungeonMasterResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref DungeonMasterApi
+      ParentId: !GetAtt DungeonMasterApi.RootResourceId
+      PathPart: "{id}"
+
+  # GET Method
+  GetMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DungeonMasterApi
+      ResourceId: !Ref DungeonMasterResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - { LambdaArn: !GetAtt DungeonMasterLambda.Arn }
+
+  # POST Method
+  PostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DungeonMasterApi
+      ResourceId: !Ref DungeonMasterResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - { LambdaArn: !GetAtt DungeonMasterLambda.Arn }
+
+  # Permission for API Gateway to invoke Lambda
+  LambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref DungeonMasterLambda
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DungeonMasterApi}/*/*/{id}
+
+  # Deployment of API
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref DungeonMasterApi
+      StageName: prod
+    DependsOn:
+      - GetMethod
+      - PostMethod
+
+Outputs:
+  ApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${DungeonMasterApi}.execute-api.${AWS::Region}.amazonaws.com/prod/{id}"

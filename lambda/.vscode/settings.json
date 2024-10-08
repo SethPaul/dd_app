@@ -1,0 +1,8 @@
+{
+    "python.testing.pytestArgs": [
+        "src", "-vv"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "python.defaultInterpreterPath": ".tox/pytest/bin/python"
+}
