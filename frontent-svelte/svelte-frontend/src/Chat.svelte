@@ -19,7 +19,7 @@
       conversation = [...conversation, { role: selectedRole, message }];
       message = "";
 
-      fetch(`/api/${sessionId}`, {
+      fetch(`https://jvgzcvmsoj.execute-api.us-west-2.amazonaws.com/Prod/putItemHandler`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(chatMessage) // Send the message in the expected format
@@ -40,17 +40,15 @@
   }
 </script>
 
-<div>
-  <h2>Group Chat</h2>
-
-  <select bind:value={selectedRole}>
+<div class="chat-section">
+  <select class="role-selection" bind:value={selectedRole}>
     <option value="" disabled selected>Select Role</option>
     {#each group as person}
       <option value={person.role}>{person.name} ({person.role})</option>
     {/each}
   </select>
 
-  <textarea bind:value={message} 
+  <textarea class="chat-input" bind:value={message} 
     placeholder="Type your message" 
     rows="4" 
     style="width: 100%;"
@@ -65,11 +63,26 @@
 </div>
 
 <style>
+
   .conversation {
     border: 1px solid #ccc;
     padding: 1rem;
     margin-top: 1rem;
     max-height: 300px;
+    max-width: 300px;
     overflow-y: auto;
+    border-radius: 10px;
+    background-color: rgba(110, 211, 75, 0.3);
+    color: rgba(0, 98, 152);
+  }
+  .role-selection {
+    border-radius: 10px;
+    background: linear-gradient(to right, rgba(255, 89, 90, 0.3), rgba(110, 211, 75, 0.3), rgba(30, 206, 202, 0.3), rgba(0, 98, 152, 0.3));
+  }
+  .chat-input {
+    border-radius: 10px;
+    margin-top: 1rem;
+    padding: 0.5rem;
+    color: rgba(0, 98, 152);
   }
 </style>
