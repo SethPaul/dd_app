@@ -5,6 +5,20 @@ default:
       resolve_s3: true
       s3_prefix: dd-team-lambda
       region: us-west-1
+      parameter_overrides:
+        StageName=dev
+      capabilities: CAPABILITY_NAMED_IAM
+      image_repositories: []
+
+prod:
+  deploy:
+    parameters:
+      stack_name: dd-team-lambda
+      resolve_s3: true
+      s3_prefix: dd-team-lambda
+      region: us-west-1
+      parameter_overrides:
+        StageName=prod
       capabilities: CAPABILITY_NAMED_IAM
       image_repositories: []
 version: 0.1

@@ -3,6 +3,15 @@ Transform:
   - AWS::Serverless-2016-10-31
 Description: Lambda function and API Gateway setup for D&D Dungeon Master backend.
 
+Parameters:
+  StageName:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+
+
 Resources:
 
   # DynamoDB Table
@@ -70,9 +79,8 @@ Resources:
       Runtime: python3.12
       CodeUri: ./src/
       Timeout: 15
-      # Environment:
-      #   Variables:
-      #     OPENAI_API_KEY: YOUR_OPENAI_API_KEY  # Replace with your OpenAI API key
+      AutoPublishAlias: "staged"
+      AutoPublishAliasAllProperties: true
 
   # API Gateway Rest API
   DungeonMasterApi:
@@ -100,7 +108,7 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub
-          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}:traffic/invocations
           - { LambdaArn: !GetAtt DungeonMasterLambda.Arn }
 
   # POST Method
@@ -115,7 +123,7 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub
-          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}/invocations
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaArn}:traffic/invocations
           - { LambdaArn: !GetAtt DungeonMasterLambda.Arn }
 
   # Permission for API Gateway to invoke Lambda
@@ -128,14 +136,13 @@ Resources:
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DungeonMasterApi}/*/*/{id}
 
   # Deployment of API
-  ApiDeployment:
-    Type: AWS::ApiGateway::Deployment
-    Properties:
-      RestApiId: !Ref DungeonMasterApi
-      StageName: prod
-    DependsOn:
-      - GetMethod
-      - PostMethod
+  # ApiDeployment:
+  #   Type: AWS::ApiGateway::Deployment
+  #   Properties:
+  #     RestApiId: !Ref DungeonMasterApi
+  #   DependsOn:
+  #     - GetMethod
+  #     - PostMethod
 
 Outputs:
   ApiEndpoint:

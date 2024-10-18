@@ -125,5 +125,4 @@ def test_post_without_user_or_msg():
 
     # Assert
     assert response['statusCode'] == 200
-    body = json.loads(response['body'])
-    assert 'UserBios' in body
+    

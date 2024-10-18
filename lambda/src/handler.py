@@ -64,29 +64,6 @@ def get_session(session_id):
             'body': json.dumps({'error': str(e)})
         }
 
-
-    # response = {
-    #             'isBase64Encoded': False,
-    #             'statusCode': 200,
-    #             'body': json.dumps({
-    #                     "users": [
-    #                         {"name": "Seth", "role":"Wizard"},
-    #                         {"name": "Hank", "role":"Warrior"},
-                            
-    #                     ],
-    #                     "dialogue": [
-    #                         {"user": "system", "msg": "Welcome to the adventure"},
-    #                         {"user": "seth", "msg": "I use my magic elixir to grow gigantic"},
-    #                         {"user": "system", "msg": "You roll a 3. the elixir back fires and you shrink to half size"}
-    #                     ]
-    #                     }),
-    #                     "headers":{
-    #                         "Content-Type": "application/json"
-    #                     }
-                
-
-                
-    #         }
     return response
 
 def add_entry(session_id, body):
@@ -130,14 +107,17 @@ def add_entry(session_id, body):
                 item['UserBios'].update(all_user_bios)
                 table.put_item(Item=item)
             
+            # Convert UserBios to line-separated text
+            bios_text = "\n".join([f"{name}: {bio}" for name, bio in item['UserBios'].items()])
+            
             return {
                 'statusCode': 200,
-                'body': json.dumps(item['UserBios'])
+                'body': bios_text
             }
 
         # Initialize chat history with the dungeon master prompt if it's empty
         if not item['ChatHistory']:
-            initial_prompt = get_dungeon_master_prompt(item['Users'])
+            initial_prompt = get_dungeon_master_prompt(item['UserBios'])
             item['ChatHistory'] = [{'role': 'system', 'content': initial_prompt}]
 
         # Add user's action to dialogue
