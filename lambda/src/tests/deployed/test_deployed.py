@@ -15,7 +15,7 @@ with open(f"{os.path.dirname(__file__)}/../../samconfig.yaml", "rb") as f:
 logger = structlog.get_logger()
 
 DEPLOY_ENV = os.getenv("DEPLOY_ENV", "default")
-API_URL = os.getenv("API_URL", "https://xwftx7c0la.execute-api.us-west-1.amazonaws.com/prod")
+API_URL = os.getenv("API_URL", "<API_URL>")
 
 sessions = [
     {
@@ -55,6 +55,20 @@ sessions = [
             })
         },
         "expected_body": '"The orc is engulfed in flames."'  # This is a placeholder. Actual response will vary.
+    },
+        {
+        "session_id": "post_session_without_msg",
+        "payload": {
+            "httpMethod": "POST",
+            "pathParameters": {"id": "new-session-id"},
+            "body": json.dumps({
+                "users": [
+                    {"name": "Seth", "role": "Wizard"},
+                    {"name": "Hank", "role": "Warrior"}
+                ],
+            })
+        },
+        "expected_body": '"Something about each user"'  # This is a placeholder. Actual response will vary.
     },
     {
         "session_id": "post_session_existing",

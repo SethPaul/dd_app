@@ -1,5 +1,7 @@
 import json
 from handler import lambda_handler
+import pytest
+from unittest.mock import patch
 
 # Sample event templates
 def generate_get_event(session_id):
@@ -15,6 +17,7 @@ def generate_post_event(session_id, body):
         'body': json.dumps(body)
     }
 
+
 # Mock data
 sample_session_id = 'foo'
 sample_users = [
@@ -25,6 +28,10 @@ sample_body = {
     'users': sample_users,
     'user': 'Seth',
     'msg': 'I cast a fireball at the orc.'
+}
+
+sample_body_without_user_or_msg = {
+    'users': sample_users,
 }
 
 
@@ -108,3 +115,15 @@ def test_post_missing_parameters():
     assert response['statusCode'] == 500
     body = json.loads(response['body'])
     assert 'error' in body
+
+def test_post_without_user_or_msg():
+    # Arrange
+    event = generate_post_event(sample_session_id, sample_body_without_user_or_msg)
+
+    # Act
+    response = lambda_handler(event, None)
+
+    # Assert
+    assert response['statusCode'] == 200
+    body = json.loads(response['body'])
+    assert 'UserBios' in body

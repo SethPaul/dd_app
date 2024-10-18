@@ -1,9 +1,9 @@
 default:
   deploy:
     parameters:
-      stack_name: dd-lambda
+      stack_name: dd-team-lambda
       resolve_s3: true
-      s3_prefix: dd-lambda
+      s3_prefix: dd-team-lambda
       region: us-west-1
       capabilities: CAPABILITY_NAMED_IAM
       image_repositories: []

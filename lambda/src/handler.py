@@ -1,6 +1,7 @@
 import json
 import boto3
 import openai
+import re
 
 # Initialize DynamoDB resource
 dynamodb = boto3.resource('dynamodb')
@@ -99,17 +100,46 @@ def add_entry(session_id, body):
                 'SessionId': session_id,
                 'Users': [],
                 'Dialogue': [],
-                'ChatHistory': []
+                'ChatHistory': [],
+                'UserBios': {}  # Initialize UserBios as an empty dict
             }
-            # Initialize chat history with the dungeon master prompt
-            initial_prompt = get_dungeon_master_prompt(body.get('users', []))
-            item['ChatHistory'] = [{'role': 'system', 'content': initial_prompt}]
-            # Update users if provided
-            if 'users' in body:
-                item['Users'] = body['users']
-        # Update users if provided
+        
+        # Ensure UserBios exists
+
         if 'users' in body:
-            item['Users'] = body['users']
+            new_users = []
+            if 'UserBios' not in item or not item['UserBios']:
+                item['UserBios'] = {}
+                new_users = body['users']
+            else:
+                for user in body['users']:
+                    if user['name'] not in [u['name'] for u in item['Users']]:
+                        new_users.append(user)
+            
+            if new_users:
+                new_user_bios = generate_character_bios(new_users)
+                item['Users'].extend(new_users)
+                item['UserBios'].update(new_user_bios)
+                table.put_item(Item=item)
+        
+        if 'user' not in body or 'msg' not in body:
+            # If no user and msg, return all stored bios
+            if not item['UserBios']:
+                # Generate bios if they don't exist
+                all_user_bios = generate_character_bios(item['Users'])
+                item['UserBios'].update(all_user_bios)
+                table.put_item(Item=item)
+            
+            return {
+                'statusCode': 200,
+                'body': json.dumps(item['UserBios'])
+            }
+
+        # Initialize chat history with the dungeon master prompt if it's empty
+        if not item['ChatHistory']:
+            initial_prompt = get_dungeon_master_prompt(item['Users'])
+            item['ChatHistory'] = [{'role': 'system', 'content': initial_prompt}]
+
         # Add user's action to dialogue
         user_action = {
             'user': body['user'],
@@ -141,14 +171,6 @@ def add_entry(session_id, body):
             'body': json.dumps({'error': str(e)})
         }
 
-    # response = {
-    #     'isBase64Encoded': False,
-    #     'headers': {
-    #         "Content-Type": "application/json"
-    #     },
-    #     'statusCode': 200,
-    #     'body': "Hank rolls a 20. Seth lands on the giant's head. The giant is confused"
-    # }
     return response
 
 def process_action(chat_history):
@@ -175,3 +197,32 @@ The adventure should be accessible and enjoyable, focusing on storytelling and c
 
 Begin the adventure when the first player provides their action."""
     return prompt
+
+def generate_character_bios(users):
+    if not users:
+        return {}
+    prompt = "Generate brief character bios for the following characters in a fantasy RPG setting:\n\n"
+    for user in users:
+        prompt += f"- {user['name']}, a {user['role']}\n"
+    prompt += "\nProvide a short, engaging description for each character. Format your response as follows:\n"
+    prompt += "CharacterName: Character description on a single line.\n"
+    prompt += "Next character on a new line."
+
+    response = openai.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are a creative writer specializing in fantasy RPG character backgrounds."},
+            {"role": "user", "content": prompt}
+        ]
+    )
+
+    # Parse the response into a dictionary
+    bios_text = response.choices[0].message.content.strip()
+    bios_dict = {}
+    for line in bios_text.split('\n'):
+        match = re.match(r'^([^:]+):\s*(.+)$', line.strip())
+        if match:
+            name, bio = match.groups()
+            bios_dict[name.strip()] = bio.strip()
+
+    return bios_dict
