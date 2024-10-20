@@ -1,8 +1,6 @@
 import json
 import uuid
 from handler import lambda_handler
-import pytest
-from unittest.mock import patch, MagicMock
 
 
 # Sample event templates
@@ -85,10 +83,7 @@ def test_post_session_new():
 def test_post_session_existing():
     # Arrange
     
-    event = generate_post_event("existing-session", {
-        'user': 'Hank',
-        'msg': 'I charge at the group of shadowy figures with my sword.'
-    })
+    event = generate_post_event("existing-session", sample_body)
 
     # Act
     response = lambda_handler(event, None)

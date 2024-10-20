@@ -69,6 +69,21 @@ Resources:
           - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionArn}:traffic/invocations
           - { LambdaArn: !GetAtt LambdaFunctionArn }
 
+  # DELETE Method
+  DeleteMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DungeonMasterApi
+      ResourceId: !Ref DungeonMasterResource
+      HttpMethod: DELETE
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionArn}:traffic/invocations
+          - { LambdaArn: !GetAtt LambdaFunctionArn }
+
   # Permission for API Gateway to invoke Lambda
   LambdaPermission:
     Type: AWS::Lambda::Permission
@@ -76,7 +91,7 @@ Resources:
       FunctionName: !Ref LambdaFunction
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
-      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DungeonMasterApi}/*/*/{id}
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DungeonMasterApi}/*/*/*
 
   # Deployment of API
   # ApiDeployment:
@@ -86,6 +101,7 @@ Resources:
   #   DependsOn:
   #     - GetMethod
   #     - PostMethod
+  #     - DeleteMethod
 
 Outputs:
   ApiEndpoint:
