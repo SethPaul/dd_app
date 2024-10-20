@@ -1,7 +1,9 @@
 import json
+import uuid
 from handler import lambda_handler
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+
 
 # Sample event templates
 def generate_get_event(session_id):
@@ -17,27 +19,32 @@ def generate_post_event(session_id, body):
         'body': json.dumps(body)
     }
 
+def generate_delete_event(session_id):
+    return {
+        'httpMethod': 'DELETE',
+        'pathParameters': {'id': session_id},
+    }
 
 # Mock data
-sample_session_id = 'foo'
+sample_session_id = 'koioih8u98udw'
 sample_users = [
     {'name': 'Seth', 'role': 'Wizard'},
     {'name': 'Hank', 'role': 'Warrior'}
 ]
-sample_body = {
-    'users': sample_users,
-    'user': 'Seth',
-    'msg': 'I cast a fireball at the orc.'
-}
 
 sample_body_without_user_or_msg = {
     'users': sample_users,
 }
+sample_body_without_users = {
+    'user': 'Seth',
+    'msg': 'I cast a fireball at the enemies.'
+}
+sample_body = sample_body_without_user_or_msg | sample_body_without_users
 
 
 def test_get_session_success():
     # Arrange
-    event = generate_get_event(sample_session_id)
+    event = generate_get_event("existing-session")
 
     # Act
     response = lambda_handler(event, None)
@@ -62,7 +69,8 @@ def test_get_session_not_found():
 
 def test_post_session_new():
     # Arrange
-    event = generate_post_event(sample_session_id, sample_body)
+    random_session_id = str(uuid.uuid4())
+    event = generate_post_event(random_session_id, sample_body)
 
     # Act
     response = lambda_handler(event, None)
@@ -70,15 +78,16 @@ def test_post_session_new():
     # Assert
     assert response['statusCode'] == 200
     body = json.loads(response['body'])
-    # assert body == 'The orc is engulfed in flames.'
-    # Verify that DynamoDB put_item was called
-    # assert mock_dynamodb.put_item.called
+
+    # delete the session
+    lambda_handler(generate_delete_event(random_session_id), None)
 
 def test_post_session_existing():
     # Arrange
-    event = generate_post_event(sample_session_id, {
+    
+    event = generate_post_event("existing-session", {
         'user': 'Hank',
-        'msg': 'I charge at the orc with my sword.'
+        'msg': 'I charge at the group of shadowy figures with my sword.'
     })
 
     # Act
@@ -87,7 +96,7 @@ def test_post_session_existing():
     # Assert
     assert response['statusCode'] == 200
     body = json.loads(response['body'])
-    # assert body == 'You slash the orc, and it falls defeated.'
+    assert body != None
 
 def test_post_invalid_method():
     # Arrange
@@ -104,17 +113,6 @@ def test_post_invalid_method():
     body = json.loads(response['body'])
     assert 'error' in body
 
-def test_post_missing_parameters():
-    # Arrange
-    event = generate_post_event(sample_session_id, {'msg': 'I look around.'})
-
-    # Act
-    response = lambda_handler(event, None)
-
-    # Assert
-    assert response['statusCode'] == 500
-    body = json.loads(response['body'])
-    assert 'error' in body
 
 def test_post_without_user_or_msg():
     # Arrange

@@ -9,7 +9,7 @@ import pytest
 import yaml
 from pytest import param
 
-with open(f"{os.path.dirname(__file__)}/../../samconfig.yaml", "rb") as f:
+with open(f"{os.path.dirname(__file__)}/../../../samconfig.yaml", "rb") as f:
     samconfig_dict = yaml.safe_load(f)
 
 logger = structlog.get_logger()

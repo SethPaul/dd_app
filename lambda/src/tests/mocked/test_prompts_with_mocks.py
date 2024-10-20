@@ -1,8 +1,15 @@
 import json
 import logging
-from handler import generate_character_bios
+from utils.prompt_helper import generate_character_bios, setup_llm
 import pytest
 from unittest.mock import patch, MagicMock
+
+
+@pytest.fixture
+def llm_prep(mock_toggle):
+    if mock_toggle:
+        return MagicMock()
+    return setup_llm()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -10,39 +17,84 @@ logger = logging.getLogger(__name__)
 
 @pytest.fixture
 def mock_openai():
-    with patch('handler.openai.chat.completions.create') as mock_create:
+    with patch('utils.prompt_helper.generate_character_bios') as mock_create:
         yield mock_create
 
-def test_generate_character_bios(mock_openai):
+@pytest.fixture
+def mock_client():
+    return MagicMock()
+
+
+def test_generate_character_bios(mock_toggle, llm_prep, mock_openai, mock_client):
+    if not mock_toggle:
+        pytest.skip("This test requires mocks")
+    
     # Arrange
     users = [
         {'name': 'Seth', 'role': 'Wizard'},
         {'name': 'Hank', 'role': 'Warrior'}
     ]
-    mock_response = MagicMock()
-    mock_response.choices[0].message.content = (
-        "Seth: A mysterious wizard with a penchant for arcane experiments. His eyes sparkle with otherworldly knowledge.\n"
-        "Hank: A brave warrior with bulging muscles and a heart of gold. His sword has seen many battles, and his scars tell tales of victory."
-    )
-    mock_openai.return_value = mock_response
+    thread_id = "test_thread_id"
+    mock_openai.return_value = {
+        "characters": [
+            {
+                "name": "Seth",
+                "role": "Wizard",
+                "background": "Seth is a reclusive wizard, shunned by society due to the dark nature of his magical studies...",
+                "role_description": "Spellcaster/Damage Dealer",
+                "example_actions": {
+                    "magic_missile": "Magic Missile - A basic attack spell that never misses and deals damage to a single enemy.",
+                    "shield": "Shield - Seth can cast a magical barrier around himself or an ally, reducing damage taken.",
+                    "special_move": "Fireball - Seth can unleash a powerful explosion of fire, damaging all enemies in a targeted area."
+                },
+                "stats": {
+                    "Strength": 2,
+                    "Dexterity": 1,
+                    "Constitution": 2,
+                    "Intelligence": 8,
+                    "Wisdom": 5,
+                    "Charisma": 6
+                }
+            },
+            {
+                "name": "Hank",
+                "role": "Warrior",
+                "background": "Hank is a battle-hardened warrior, known for his incredible strength and unyielding resolve...",
+                "role_description": "Tank/Frontline Fighter",
+                "example_actions": {
+                    "shield_bash": "Shield Bash - Hank can strike an enemy with his shield, stunning them temporarily and pushing them back.",
+                    "cleave": "Cleave - Hank delivers a powerful swing of his weapon, damaging multiple enemies in front of him.",
+                    "whirlwind_attack": "Whirlwind Attack - A spinning strike that simultaneously attacks all nearby foes, showcasing Hank's impressive martial skills."
+                },
+                "stats": {
+                    "Strength": 8,
+                    "Dexterity": 4,
+                    "Constitution": 6,
+                    "Intelligence": 2,
+                    "Wisdom": 3,
+                    "Charisma": 4
+                }
+            }
+        ]
+    }
 
     # Act
-    result = generate_character_bios(users)
+    result = generate_character_bios(mock_client, users, thread_id)
 
     # Log the response and result
-    logger.info(f"Mock OpenAI Response: {mock_response.choices[0].message.content}")
+    # logger.info(f"Mock OpenAI Response: {mock_response.choices[0].message.content}")
     logger.info(f"Generated Bios: {result}")
 
     # Assert
     assert isinstance(result, dict)
-    assert "Seth" in result
-    assert "Hank" in result
-    assert "mysterious wizard" in result["Seth"]
-    assert "brave warrior" in result["Hank"]
+    assert "Seth" in result["characters"]
+    assert "Hank" in result["characters"]
+    assert "mysterious wizard" in result["characters"]["Seth"]
+    assert "brave warrior" in result["characters"]["Hank"]
     
     mock_openai.assert_called_once()
     call_args = mock_openai.call_args[1]
-    assert call_args['model'] == "gpt-3.5-turbo"
+    assert call_args['model'] == "gpt-4o-mini"
     assert len(call_args['messages']) == 2
     assert call_args['messages'][0]['role'] == "system"
     assert call_args['messages'][1]['role'] == "user"
@@ -54,6 +106,13 @@ def test_generate_character_bios(mock_openai):
 
     # Log the prompt sent to OpenAI
     logger.info(f"Prompt sent to OpenAI: {call_args['messages'][1]['content']}")
+
+    # Assert client usage
+    mock_client.beta.threads.messages.create.assert_called_once_with(
+        thread_id=thread_id,
+        role="user",
+        content=pytest.approx(call_args['messages'][1]['content'])
+    )
 
 def test_generate_character_bios_single_user(mock_openai):
     # Arrange

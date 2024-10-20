@@ -44,14 +44,18 @@ mock_get_item_response = {
 }
 
 @pytest.fixture
-def mock_dynamodb():
+def mock_dynamodb(mock_toggle):
+    if not mock_toggle:
+        pytest.skip("This test requires mocks")
     with patch('handler.dynamodb') as mock_dynamodb_resource:
         mock_table = MagicMock()
         mock_dynamodb_resource.resource.return_value.Table.return_value = mock_table
         yield mock_table
 
 @pytest.fixture
-def mock_openai():
+def mock_openai(mock_toggle):
+    if not mock_toggle:
+        pytest.skip("This test requires mocks")
     with patch('handler.openai') as mock_openai_module:
         mock_chat_completion = MagicMock()
         mock_chat_completion.create.return_value = {
@@ -64,7 +68,10 @@ def mock_openai():
         mock_openai_module.ChatCompletion = mock_chat_completion
         yield mock_openai_module
 
-def test_get_session_success(mock_dynamodb):
+def test_get_session_success(mock_toggle, mock_dynamodb):
+    if not mock_toggle:
+        pytest.skip("This test requires mocks")
+    
     # Arrange
     mock_dynamodb.get_item.return_value = mock_get_item_response
     event = generate_get_event(sample_session_id)

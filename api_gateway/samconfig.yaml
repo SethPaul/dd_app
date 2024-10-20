@@ -7,7 +7,8 @@ default:
       region: us-west-1
       on_failure: DELETE
       parameter_overrides:
-        ApiGatewayId=0y3qa3p485        
+        LambdaArn: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionArn}:traffic/invocations
+        LambdaFunctionName: LambdaFunctionName
       capabilities: CAPABILITY_NAMED_IAM
       image_repositories: []
 

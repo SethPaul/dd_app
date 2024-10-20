@@ -1,9 +1,17 @@
 import json
-from handler import generate_character_bios
-from unittest.mock import patch, MagicMock
+from utils.prompt_helper import generate_character_bios, setup_llm
+import pytest
 
+@pytest.fixture
+def llm_prep(mock_toggle):
+    if mock_toggle:
+        pytest.skip("This test requires real services")
+    return setup_llm()
 
-def test_generate_character_bios():
+def test_generate_character_bios(mock_toggle, llm_prep):
+    if mock_toggle:
+        pytest.skip("This test requires real services")
+    
     # Arrange
     users = [
         {'name': 'Seth', 'role': 'Wizard'},
@@ -11,7 +19,7 @@ def test_generate_character_bios():
     ]
 
     # Act
-    result = generate_character_bios(users)
+    result = generate_character_bios(llm_prep, users)
 
     # Assert
     assert isinstance(result, dict)
@@ -19,7 +27,7 @@ def test_generate_character_bios():
     assert "Hank" in result
     
 
-def test_generate_character_bios_fallback():
+def test_generate_character_bios_fallback(llm_prep):
     # Arrange
     users = [
         {'name': 'Seth', 'role': 'Wizard'},
@@ -34,7 +42,7 @@ def test_generate_character_bios_fallback():
     assert "Seth" in result
     assert "Hank" in result
 
-def test_generate_character_bios_single_user():
+def test_generate_character_bios_single_user(llm_prep):
     # Arrange
     users = [{'name': 'Lila', 'role': 'Rogue'}]
     # Act
@@ -44,4 +52,3 @@ def test_generate_character_bios_single_user():
     assert isinstance(result, dict)
     assert len(result) == 1
     assert "Lila" in result
-
