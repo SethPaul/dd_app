@@ -82,20 +82,24 @@ def transform_to_rich_text(character_json):
     try:
         rich_text = ""
         for character in character_json:
-            rich_text += f"# {character['name']} - {character['role']}\n\n"
-            rich_text += f"## Background\n{character['background']}\n\n"
-            rich_text += f"## Role\n{character['role_description']}\n\n"
-            
-            rich_text += "## Example Actions\n"
-            for action, description in character['example_actions'].items():
-                rich_text += f"- **{action.replace('_', ' ').title()}**: {description}\n"
-            
-            rich_text += "\n## Stats\n"
-            for stat, value in character['stats'].items():
-                rich_text += f"- **{stat}**: {value}\n"
-            
-            logger.info("Character JSON transformed to rich text successfully")
-            rich_text += "\n\n"
+            try:
+                rich_text += f"# {character['name']} - {character['role']}\n\n"
+                rich_text += f"## Background\n{character['background']}\n\n"
+                rich_text += f"## Role\n{character['role_description']}\n\n"
+                
+                rich_text += "## Example Actions\n"
+                for action, description in character['example_actions'].items():
+                    rich_text += f"- **{action.replace('_', ' ').title()}**: {description}\n"
+                
+                rich_text += "\n## Stats\n"
+                for stat, value in character['stats'].items():
+                    rich_text += f"- **{stat}**: {value}\n"
+                
+                logger.info("Character JSON transformed to rich text successfully")
+                rich_text += "\n\n"
+            except KeyError as e:
+                logger.error("Error transforming character JSON to rich text", error=str(e), character_json=character)
+                # raise
         return rich_text
     except KeyError as e:
         logger.error("Error transforming character JSON to rich text", error=str(e), character_json=character_json)

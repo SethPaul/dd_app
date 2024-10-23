@@ -36,6 +36,7 @@ def update_bios_as_needed(table, client, body, item):
     if 'UserBios' not in item or not item['UserBios']:
         item['UserBios'] = {}
         new_users = body['users']
+        item['Users'] = new_users
     else:
         for user in body['users']:
             if user['name'] not in [u['name'] for u in item['Users']]:

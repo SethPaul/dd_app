@@ -53,6 +53,6 @@ Resources:
       Role: !GetAtt LambdaExecutionRole.Arn
       Runtime: python3.12
       CodeUri: ./src/
-      Timeout: 15
+      Timeout: 300
       AutoPublishAlias: "staged"
       AutoPublishAliasAllProperties: true

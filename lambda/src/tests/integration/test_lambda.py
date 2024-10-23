@@ -51,7 +51,6 @@ def test_get_session_success():
     assert response['statusCode'] == 200
     body = json.loads(response['body'])
     assert body['users'] == sample_users
-    # assert body['dialogue'] == mock_get_item_response['Item']['Dialogue']
 
 def test_get_session_not_found():
     # Arrange
