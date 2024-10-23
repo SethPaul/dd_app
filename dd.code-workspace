@@ -7,8 +7,9 @@
 			"name": "lambda",
 			"path": "lambda"
 		},
-		
-
+		{
+			"path": "webapp/dd_web"
+		}
 	],
 	"settings": {}
 }
