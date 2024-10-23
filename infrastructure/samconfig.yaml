@@ -1,0 +1,14 @@
+default:
+  deploy:
+    parameters:
+      stack_name: dd-infra
+      resolve_s3: true
+      s3_prefix: dd-infra
+      region: us-west-1
+      on_failure: DELETE
+      parameter_overrides:
+        StageName=dev
+      capabilities: CAPABILITY_NAMED_IAM
+      image_repositories: []
+
+version: 0.1
