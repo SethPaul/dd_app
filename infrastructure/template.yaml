@@ -50,9 +50,11 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub
-          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionArn}:traffic/invocations
-          - { LambdaArn: !GetAtt LambdaFunctionArn }
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionArn}:traffic/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
 
   # POST Method
   PostMethod:
@@ -65,9 +67,11 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub
-          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionArn}:traffic/invocations
-          - { LambdaArn: !GetAtt LambdaFunctionArn }
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionArn}:traffic/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
 
   # DELETE Method
   DeleteMethod:
@@ -80,28 +84,56 @@ Resources:
       Integration:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
-        Uri: !Sub
-          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionArn}:traffic/invocations
-          - { LambdaArn: !GetAtt LambdaFunctionArn }
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaFunctionArn}:traffic/invocations
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+
+  # OPTIONS Method for CORS
+  OptionsMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref DungeonMasterApi
+      ResourceId: !Ref DungeonMasterResource
+      HttpMethod: OPTIONS
+      AuthorizationType: NONE
+      Integration:
+        Type: MOCK
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+              method.response.header.Access-Control-Allow-Methods: "'GET,POST,DELETE,OPTIONS'"
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+        RequestTemplates:
+          application/json: '{"statusCode": 200}'
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Headers: true
+            method.response.header.Access-Control-Allow-Methods: true
+            method.response.header.Access-Control-Allow-Origin: true
 
   # Permission for API Gateway to invoke Lambda
   LambdaPermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref LambdaFunction
+      FunctionName: !Ref LambdaFunctionName
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${DungeonMasterApi}/*/*/*
 
   # Deployment of API
-  # ApiDeployment:
-  #   Type: AWS::ApiGateway::Deployment
-  #   Properties:
-  #     RestApiId: !Ref DungeonMasterApi
-  #   DependsOn:
-  #     - GetMethod
-  #     - PostMethod
-  #     - DeleteMethod
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    Properties:
+      RestApiId: !Ref DungeonMasterApi
+    DependsOn:
+      - GetMethod
+      - PostMethod
+      - DeleteMethod
+      - OptionsMethod
 
 Outputs:
   ApiEndpoint:

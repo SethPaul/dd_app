@@ -12,30 +12,38 @@
     conversation = [...dialogue];
   });
 
-  function sendMessage() {
+  const backendUrl = "http://localhost:3000";
+
+  async function sendMessage() {
     if (selectedRole && message) {
-      let chatMessage = { user: selectedRole.toLowerCase(), msg: message }; // Changed to match your backend payload
+      let chatMessage = { user: selectedRole.toLowerCase(), msg: message };
 
       conversation = [...conversation, { role: selectedRole, message }];
       message = "";
 
-      fetch(`https://jvgzcvmsoj.execute-api.us-west-2.amazonaws.com/Prod/putItemHandler`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(chatMessage) // Send the message in the expected format
-      })
-      .then(response => response.json())
-      .then(data => {
-        conversation = [...conversation, { role: "LLM", message: data.response }]; // Adjusted based on your backend response
-      })
-      .catch(error => console.error("Error:", error));
+      try {
+        const response = await fetch(`${backendUrl}/${sessionId}`, {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+          },
+          body: JSON.stringify(chatMessage)
+        });
+
+        const data = await response.json();
+        conversation = [...conversation, { role: "LLM", message: data.response }];
+      } catch (error) {
+        console.error("Error:", error);
+      }
     }
   }
   
-  function handleKeyPress(event) {
+  async function handleKeyPress(event) {
     if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();  // Prevents adding new line in textarea
-      sendMessage();
+      event.preventDefault();
+      await sendMessage();
     }
   }
 </script>

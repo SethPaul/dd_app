@@ -7,7 +7,8 @@ default:
       region: us-west-1
       on_failure: DELETE
       parameter_overrides:
-        StageName=dev
+        LambdaFunctionName=dd-lambda-DungeonMasterLambda-mTQLkRF7rkvt
+        LambdaFunctionArn=arn:aws:lambda:us-west-1:384383477717:function:dd-lambda-DungeonMasterLambda-mTQLkRF7rkvt
       capabilities: CAPABILITY_NAMED_IAM
       image_repositories: []
 

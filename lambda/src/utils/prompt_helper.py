@@ -77,32 +77,34 @@ def generate_character_bios(client, users, thread_id):
         logger.error("Error generating character bios", error=str(e))
         raise
 
-def transform_to_rich_text(character_json):
-    logger.info("Transforming character JSON to rich text")
+def transform_to_html(character_json):
+    logger.info("Transforming character JSON to HTML")
     try:
-        rich_text = ""
+        html = ""
         for character in character_json:
             try:
-                rich_text += f"# {character['name']} - {character['role']}\n\n"
-                rich_text += f"## Background\n{character['background']}\n\n"
-                rich_text += f"## Role\n{character['role_description']}\n\n"
+                html += f"<h1>{character['name']} - {character['role']}</h1>\n"
+                html += f"<h2>Background</h2>\n<p>{character['background']}</p>\n"
+                html += f"<h2>Role</h2>\n<p>{character['role_description']}</p>\n"
                 
-                rich_text += "## Example Actions\n"
+                html += "<h2>Example Actions</h2>\n<ul>\n"
                 for action, description in character['example_actions'].items():
-                    rich_text += f"- **{action.replace('_', ' ').title()}**: {description}\n"
+                    html += f"<li><strong>{action.replace('_', ' ').title()}</strong>: {description}</li>\n"
+                html += "</ul>\n"
                 
-                rich_text += "\n## Stats\n"
+                html += "<h2>Stats</h2>\n<ul>\n"
                 for stat, value in character['stats'].items():
-                    rich_text += f"- **{stat}**: {value}\n"
+                    html += f"<li><strong>{stat}</strong>: {value}</li>\n"
+                html += "</ul>\n"
                 
-                logger.info("Character JSON transformed to rich text successfully")
-                rich_text += "\n\n"
+                logger.info("Character JSON transformed to HTML successfully")
+                html += "<hr>\n"
             except KeyError as e:
-                logger.error("Error transforming character JSON to rich text", error=str(e), character_json=character)
+                logger.error("Error transforming character JSON to HTML", error=str(e), character_json=character)
                 # raise
-        return rich_text
+        return html
     except KeyError as e:
-        logger.error("Error transforming character JSON to rich text", error=str(e), character_json=character_json)
+        logger.error("Error transforming character JSON to HTML", error=str(e), character_json=character_json)
         raise
 
 def process_action(client, thread_id, action):
@@ -315,3 +317,4 @@ error_responses = [
     "An otherworldly force intervenes, preventing me from seeing the result. Shall we defy it with another try?",
     "The veil between worlds thickens, hiding the consequences from my sight. Please restate your intention."
 ]
+
