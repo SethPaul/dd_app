@@ -131,7 +131,7 @@ def add_entry(table, client, session_id, body):
         # Return DM response
         response = {
             'statusCode': 200,
-            'body': json.dumps(dm_response),
+            'body': json.dumps(dm_response.replace("\u2018", "'").replace("\u2019", "'")),
             'headers': response_headers  # Add headers here
         }
        

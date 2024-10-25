@@ -12,7 +12,7 @@
     conversation = [...dialogue];
   });
 
-  const backendUrl = "http://localhost:3000";
+  const backendUrl = "https://bx9qs5sk31.execute-api.us-west-1.amazonaws.com/prod";
 
   async function sendMessage() {
     if (selectedRole && message) {
@@ -32,8 +32,8 @@
           body: JSON.stringify(chatMessage)
         });
 
-        const data = await response.json();
-        conversation = [...conversation, { role: "LLM", message: data.response }];
+        const responseText = await response.text();
+        conversation = [...conversation, { role: "LLM", message: responseText }];
       } catch (error) {
         console.error("Error:", error);
       }
@@ -77,11 +77,11 @@
     padding: 1rem;
     margin-top: 1rem;
     max-height: 300px;
-    max-width: 300px;
     overflow-y: auto;
     border-radius: 10px;
     background-color: rgba(110, 211, 75, 0.3);
     color: rgba(0, 98, 152);
+    width: 100%;
   }
   .role-selection {
     border-radius: 10px;

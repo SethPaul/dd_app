@@ -52,7 +52,7 @@
     <br>
 She points to a dark, twisted path leading into the forest. The party begins down the path into the forest.  Before long the party comes across a group of shadowy figures chanting in the shadows off the path. It is unclear who they are or what they are doing.</p>`; // Initial story HTML
 
-  const backendUrl = "http://localhost:3000";
+  const backendUrl = "https://bx9qs5sk31.execute-api.us-west-1.amazonaws.com/prod";
 
   async function sendRolesToBackend(group) {
     try {
