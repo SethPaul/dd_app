@@ -1,0 +1,23 @@
+default:
+  build:
+    parameters:
+      template: service_template.yaml
+  deploy:
+    parameters:
+      stack_name: dd-infra-svelte-frontend
+      region: us-west-1
+      resolve_s3: true
+      s3_prefix: dd-infra-svelte-frontend
+      on_failure: DELETE
+      capabilities: CAPABILITY_NAMED_IAM
+      image_repositories: []
+      parameter_overrides:
+        ECSCluster=<your ecs cluster name>
+        PublicSubnet1=<your public subnet 1>
+        PublicSubnet2=<your public subnet 2>
+        ContainerSecurityGroup=<your container security group>
+        LogGroup=/ecs/<your log group>
+        ECRRepositoryURI=<your ecr repository uri>
+        TargetGroupArn=<your target group arn>
+
+version: 0.1

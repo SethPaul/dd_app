@@ -1,0 +1,35 @@
+api_gateway:
+  build:
+    parameters:
+      template: api_gateway_template.yaml
+  deploy:
+    parameters:
+      stack_name: dd-infra
+      resolve_s3: true
+      s3_prefix: dd-infra
+      region: <your region>
+      on_failure: DELETE
+      parameter_overrides:
+        LambdaFunctionName=<your lambda function name>
+        LambdaFunctionArn=arn:aws:lambda:<your region>:<your account id>:function:<your lambda function name>
+      capabilities: CAPABILITY_NAMED_IAM
+      image_repositories: []
+
+
+vpc:
+  build:
+    parameters:
+      template: vpc_template.yaml
+  deploy:
+    parameters:
+      stack_name: dd-infra-vpc
+      region: <your region>
+      resolve_s3: true
+      s3_prefix: dd-infra-vpc
+      on_failure: DELETE
+      capabilities: CAPABILITY_NAMED_IAM
+      parameter_overrides:
+        CertificateArn=<your certificate arn>
+
+
+version: 0.1
