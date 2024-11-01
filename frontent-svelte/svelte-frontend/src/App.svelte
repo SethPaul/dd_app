@@ -8,27 +8,20 @@
   let currentPerson = 0;
   let name = "";
   let role = "";
-  let sessionId = "some-session-id"; // Adjust this with the actual session ID
+  let sessionId;
 
-  // Fetch session data when the app loads
-  // onMount(async () => {
-  //   await fetchSession();
-  // });
-
-  // async function fetchSession() {
-  //   try {
-  //     const response = await fetch(`https://jvgzcvmsoj.execute-api.us-west-2.amazonaws.com/Prod/`);
-  //     const data = await response.json();
-  //     group = data.users;
-  //     // The dialogue from the session will be passed to the Chat component
-  //     dialogue = data.dialogue || [];
-  //     if (group.length > 0) {
-  //       isSetupComplete = true;
-  //     }
-  //   } catch (error) {
-  //     console.error("Error fetching session:", error);
-  //   }
-  // }
+  // Generate random session ID and update URL
+  onMount(() => {
+    const pathSessionId = window.location.pathname.slice(1); // Remove leading slash
+    if (pathSessionId) {
+      sessionId = pathSessionId;
+    } else {
+      // Generate random session ID if none in URL
+      sessionId = Math.random().toString(36).substring(2, 15);
+      // Update URL without page reload
+      window.history.pushState({}, '', `/${sessionId}`);
+    }
+  });
 
   async function addPerson() {
     if (name && role) {
@@ -52,7 +45,7 @@
     <br>
 She points to a dark, twisted path leading into the forest. The party begins down the path into the forest.  Before long the party comes across a group of shadowy figures chanting in the shadows off the path. It is unclear who they are or what they are doing.</p>`; // Initial story HTML
 
-  const backendUrl = "https://bx9qs5sk31.execute-api.us-west-1.amazonaws.com/prod";
+  const backendUrl = "https://dd-api.ironoak.io";
 
   async function sendRolesToBackend(group) {
     try {

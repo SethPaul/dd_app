@@ -1,3 +1,5 @@
 *.aws-sam*
 *.tox/*
 *__pycache__*
+
+*samconfig.yaml

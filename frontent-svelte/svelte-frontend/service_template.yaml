@@ -1,0 +1,119 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for Svelte app on Fargate'
+
+Parameters:
+  ContainerPort:
+    Type: Number
+    Default: 3000
+    Description: Port the container exposes
+  
+  DesiredCount:
+    Type: Number
+    Default: 0
+    Description: Number of containers to run
+    
+  ImageTag:
+    Type: String
+    Default: stable
+    Description: Docker image tag
+
+  ECRRepositoryURI:
+    Type: String
+    Description: ECR repository URI
+
+  ECSCluster:
+    Type: String
+    Description: ECS cluster name
+  
+  PublicSubnet1:
+    Type: String
+    Description: Public subnet 1  
+
+  PublicSubnet2:
+    Type: String
+    Description: Public subnet 2   
+
+  ContainerSecurityGroup:
+    Type: String
+    Description: Container security group
+
+  LogGroup:
+    Type: String
+    Description: CloudWatch log group
+  
+  TargetGroupArn:
+    Type: String
+    Description: Target group
+
+
+
+Resources:
+
+  # Task Definition
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: svelte-app
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: svelte-app
+          Image: !Sub ${ECRRepositoryURI}:${ImageTag}
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  # IAM Roles
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+
+  # ECS Service
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: svelte-app-service
+      Cluster: !Ref ECSCluster
+      TaskDefinition: !Ref TaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
+          SecurityGroups:
+            - !Ref ContainerSecurityGroup
+      LoadBalancers:
+        - ContainerName: svelte-app
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref TargetGroupArn

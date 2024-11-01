@@ -12,7 +12,7 @@
     conversation = [...dialogue];
   });
 
-  const backendUrl = "https://bx9qs5sk31.execute-api.us-west-1.amazonaws.com/prod";
+  const backendUrl = "https://dd-api.ironoak.io";
 
   async function sendMessage() {
     if (selectedRole && message) {

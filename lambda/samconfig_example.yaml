@@ -7,7 +7,7 @@ default:
       region: us-west-1
       on_failure: DELETE
       parameter_overrides:
-        ApiGatewayId=0y3qa3p485        
+        ApiGatewayId=<your api gateway id>        
       capabilities: CAPABILITY_NAMED_IAM
       image_repositories: []
 
