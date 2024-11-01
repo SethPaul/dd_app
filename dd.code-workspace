@@ -8,8 +8,9 @@
 			"path": "lambda"
 		},
 		{
-			"path": "webapp/dd_web"
+			"path": "frontent-svelte/svelte-frontend"
 		}
 	],
-	"settings": {}
+	"settings": {},
+	
 }

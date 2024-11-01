@@ -13,6 +13,12 @@ table = dynamodb.Table('DungeonsAndDragonsSessions')
 logger = structlog.get_logger(__name__)
 
 prompt_helper.setup_llm()
+response_headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Access-Control-Allow-Headers,Access-Control-Allow-Origin",
+    "Access-Control-Allow-Methods": "DELETE,GET,OPTIONS,POST",
+    "Content-Type": "text/html"
+}
 
 
 def lambda_handler(event, context):
@@ -39,9 +45,13 @@ def lambda_handler(event, context):
         logger.warning("Unsupported HTTP method", method=method)
         response = {
             'statusCode': 405,
-            'body': json.dumps({'error': 'Method not allowed'})
+            'body': json.dumps({'error': 'Method not allowed'}),
+            'headers': response_headers  # Add headers here
         }
     
+    # Add headers to the response
+    # response['headers'] = response_headers
+
     logger.info("Lambda function completed", response_status=response['statusCode'])
     
     return response
@@ -58,19 +68,22 @@ def get_session(table, client, session_id):
                 'body': json.dumps({
                     'users': session.get('Users', []),
                     'dialogue': session.get('Dialogue', [])
-                })
+                }),
+                'headers': response_headers  # Add headers here
             }
         else:
             logger.warning("Session not found")
             response = {
                 'statusCode': 404,
-                'body': json.dumps({'error': 'Session not found'})
+                'body': json.dumps({'error': 'Session not found'}),
+                'headers': response_headers  # Add headers here
             }
     except Exception as e:
         logger.error("Error retrieving session", error=str(e), exc_info=e)
         response = {
             'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': str(e)}),
+            'headers': response_headers  # Add headers here
         }
 
     return response
@@ -89,16 +102,17 @@ def add_entry(table, client, session_id, body):
             new_user_bios_json = session_manager.update_bios_as_needed(table, client, body, session)
             if len(new_user_bios_json) == 0:
                 user_bios_json = [session['UserBios'][character] for character in session['UserBios'].keys()]
-                bios_text = prompt_helper.transform_to_rich_text(user_bios_json)
+                bios_text = prompt_helper.transform_to_html(user_bios_json)
 
             if new_user_bios_json:
-                bios_text = prompt_helper.transform_to_rich_text(new_user_bios_json)
+                bios_text = prompt_helper.transform_to_html(new_user_bios_json)
         # if no action, return all stored bios
         
         if 'user' not in body or 'msg' not in body:
             return {
                 'statusCode': 200,
-                'body': bios_text
+                'body': bios_text,
+                'headers': response_headers  # Add headers here
             }
 
         dm_response = session_manager.add_message_to_session(table, client, body, session)
@@ -117,7 +131,8 @@ def add_entry(table, client, session_id, body):
         # Return DM response
         response = {
             'statusCode': 200,
-            'body': json.dumps(dm_response)
+            'body': json.dumps(dm_response.replace("\u2018", "'").replace("\u2019", "'")),
+            'headers': response_headers  # Add headers here
         }
        
     except Exception as e:
@@ -125,7 +140,8 @@ def add_entry(table, client, session_id, body):
 
         response = {
             'statusCode': 500,
-            'body': json.dumps({'error': random.choice(prompt_helper.error_responses)})
+            'body': json.dumps({'error': random.choice(prompt_helper.error_responses)}),
+            'headers': response_headers  # Add headers here
         }
 
     return response
@@ -153,19 +169,22 @@ def delete_session(table, session_id):
             logger.info("Session deleted successfully")
             response = {
                 'statusCode': 200,
-                'body': json.dumps({'message': 'Session deleted successfully'})
+                'body': json.dumps({'message': 'Session deleted successfully'}),
+                'headers': response_headers  # Add headers here
             }
         else:
             logger.warning("Session not found for deletion")
             response = {
                 'statusCode': 404,
-                'body': json.dumps({'error': 'Session not found'})
+                'body': json.dumps({'error': 'Session not found'}),
+                'headers': response_headers  # Add headers here
             }
     except Exception as e:
         logger.error("Error deleting session", error=str(e))
         response = {
             'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps({'error': str(e)}),
+            'headers': response_headers  # Add headers here
         }
 
     return response

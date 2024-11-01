@@ -11,25 +11,26 @@
   let sessionId = "some-session-id"; // Adjust this with the actual session ID
 
   // Fetch session data when the app loads
-  // onMount(() => {
-  //   fetchSession();
+  // onMount(async () => {
+  //   await fetchSession();
   // });
 
-  // function fetchSession() {
-  //   fetch(`https://jvgzcvmsoj.execute-api.us-west-2.amazonaws.com/Prod/`)
-  //     .then(response => response.json())
-  //     .then(data => {
-  //       group = data.users;
-  //       // The dialogue from the session will be passed to the Chat component
-  //       dialogue = data.dialogue || [];
-  //       if (group.length > 0) {
-  //         isSetupComplete = true;
-  //       }
-  //     })
-  //     .catch(error => console.error("Error fetching session:", error));
+  // async function fetchSession() {
+  //   try {
+  //     const response = await fetch(`https://jvgzcvmsoj.execute-api.us-west-2.amazonaws.com/Prod/`);
+  //     const data = await response.json();
+  //     group = data.users;
+  //     // The dialogue from the session will be passed to the Chat component
+  //     dialogue = data.dialogue || [];
+  //     if (group.length > 0) {
+  //       isSetupComplete = true;
+  //     }
+  //   } catch (error) {
+  //     console.error("Error fetching session:", error);
+  //   }
   // }
 
-  function addPerson() {
+  async function addPerson() {
     if (name && role) {
       group = [...group, { name, role }];
       name = "";
@@ -38,27 +39,60 @@
       if (currentPerson >= groupSize) {
         // Setup complete
         isSetupComplete = true;
-        sendRolesToBackend(group);  // Send roles to backend after setup
+        await sendRolesToBackend(group);  // Send roles to backend after setup
       }
     }
   }
 
-  function sendRolesToBackend(group) {
-    fetch(`https://jvgzcvmsoj.execute-api.us-west-2.amazonaws.com/Prod/putItemHandler`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ users: group })
-    })
-    .then(response => response.json())
-    .then(data => console.log("Roles setup response:", data))
-    .catch(error => console.error("Error sending roles:", error));
+  let storyHtml = `<p>The air is thick with fog as you and your fellow adventurers step into the village of Black Hollow. The sun barely penetrates the gloom, casting everything in an eerie, shadowy light. You can feel the eyes of the villagers on you—wary, fearful, but also hopeful.
+    <br>
+    <br>
+    Lila, a young woman with worry etched on her face, approaches you. Her voice trembles as she speaks, "Thank the gods you've come! Our village is cursed. Ever since that idol was unearthed in the forest, darkness has fallen over us. Please, you must help us destroy it before it consumes us all."
+    <br>
+    <br>
+She points to a dark, twisted path leading into the forest. The party begins down the path into the forest.  Before long the party comes across a group of shadowy figures chanting in the shadows off the path. It is unclear who they are or what they are doing.</p>`; // Initial story HTML
+
+  const backendUrl = "https://bx9qs5sk31.execute-api.us-west-1.amazonaws.com/prod";
+
+  async function sendRolesToBackend(group) {
+    try {
+      const response = await fetch(`${backendUrl}/${sessionId}`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "*",
+        },
+        body: JSON.stringify({ users: group }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const response_text = await response.text();
+      console.log("Roles setup response:", response_text);
+      
+      // Update the story HTML with the received data
+      if (response_text) {
+        storyHtml = response_text;
+      }
+      
+    } catch (error) {
+      console.error("Error sending roles:", error);
+    }
   }
 </script>
 
 <main>
 	<h2>Hi 👋 Saga Product Team!</h2>
 	<h1>Welcome to The Cursed Idol of Black Hollow <br> 🪄🌑🖤✨👻🌌</h1>
-
+  <p>Session ID: {sessionId}</p>
+  <br>
+	<div class="story-container">
+		{@html storyHtml}
+	</div>
+	<br>
 	{#if !isSetupComplete}
 		<div class="container">
 			<h2>Enter the number of people in your group:</h2>
@@ -85,12 +119,14 @@
     transform: translate(-50%, -50%); /* Shift the element back by half its height and width */
     text-align: center;          /* Center the text inside the main element */
     padding: 1em;                /* Add padding */
-    max-width: 240px;            /* Set max width */
+    max-width: 80vw;            /* Set max width */
     background: #F3F4F4;         /* Background color */
     font-family: 'Montserrat', sans-serif; /* Font family */
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Optional: adds a subtle shadow */
     border-radius: 10px;
     padding: 30px;
+    width: 80%;
+    margin: 0 auto;
   }
   .container {
     background: linear-gradient(to right, rgba(255, 89, 90, 0.5), rgba(110, 211, 75, 0.5), rgba(30, 206, 202, 0.5), rgba(0, 98, 152, 0.5)); /* Adjust alpha (0.7) as needed */
@@ -115,4 +151,23 @@
 			max-width: none;
 		}
 	}
+
+  .story-container {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 10px;
+    border-radius: 5px;
+    background-color: #fff;
+    text-align: left;
+  }
+
+  .story-container :global(p) {
+    margin: 0 0 1em 0;
+    line-height: 1.6;
+  }
+
+  .story-container :global(p:last-child) {
+    margin-bottom: 0;
+  }
 </style>

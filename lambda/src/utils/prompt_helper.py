@@ -77,32 +77,34 @@ def generate_character_bios(client, users, thread_id):
         logger.error("Error generating character bios", error=str(e))
         raise
 
-def transform_to_rich_text(character_json):
-    logger.info("Transforming character JSON to rich text")
+def transform_to_html(character_json):
+    logger.info("Transforming character JSON to HTML")
     try:
-        rich_text = ""
+        html = ""
         for character in character_json:
             try:
-                rich_text += f"# {character['name']} - {character['role']}\n\n"
-                rich_text += f"## Background\n{character['background']}\n\n"
-                rich_text += f"## Role\n{character['role_description']}\n\n"
+                html += f"<h1>{character['name']} - {character['role']}</h1>\n"
+                html += f"<h2>Background</h2>\n<p>{character['background']}</p>\n"
+                html += f"<h2>Role</h2>\n<p>{character['role_description']}</p>\n"
                 
-                rich_text += "## Example Actions\n"
+                html += "<h2>Example Actions</h2>\n<ul>\n"
                 for action, description in character['example_actions'].items():
-                    rich_text += f"- **{action.replace('_', ' ').title()}**: {description}\n"
+                    html += f"<li><strong>{action.replace('_', ' ').title()}</strong>: {description}</li>\n"
+                html += "</ul>\n"
                 
-                rich_text += "\n## Stats\n"
+                html += "<h2>Stats</h2>\n<ul>\n"
                 for stat, value in character['stats'].items():
-                    rich_text += f"- **{stat}**: {value}\n"
+                    html += f"<li><strong>{stat}</strong>: {value}</li>\n"
+                html += "</ul>\n"
                 
-                logger.info("Character JSON transformed to rich text successfully")
-                rich_text += "\n\n"
+                logger.info("Character JSON transformed to HTML successfully")
+                html += "<hr>\n"
             except KeyError as e:
-                logger.error("Error transforming character JSON to rich text", error=str(e), character_json=character)
+                logger.error("Error transforming character JSON to HTML", error=str(e), character_json=character)
                 # raise
-        return rich_text
+        return html
     except KeyError as e:
-        logger.error("Error transforming character JSON to rich text", error=str(e), character_json=character_json)
+        logger.error("Error transforming character JSON to HTML", error=str(e), character_json=character_json)
         raise
 
 def process_action(client, thread_id, action):
@@ -230,41 +232,41 @@ How to DM the encounter
 
     Describe the Environment: Use sensory details—sights, sounds, smells, and feelings.
 
-        Example: “As you step into the forest, the trees loom over you like giants, their branches twisting in the wind. A faint, musty smell of decaying leaves fills the air, and you can hear the distant howl of a wolf.”
+        Example: "As you step into the forest, the trees loom over you like giants, their branches twisting in the wind. A faint, musty smell of decaying leaves fills the air, and you can hear the distant howl of a wolf."
 
     Set the Mood: Adjust your tone to match the situation. Be suspenseful during tense moments, excited during combat, and calm during downtime.
 
     Use Metaphors: Compare what they're experiencing to something familiar.
 
-        Example: “The idol pulses with a dark energy, like the heartbeat of some ancient beast.”
+        Example: "The idol pulses with a dark energy, like the heartbeat of some ancient beast."
 
 2. Engage the Players
 
     Ask Questions: Get the players involved by asking them to describe their actions or thoughts.
 
-        Example: “As you approach the shadowy figures, what's going through your mind? How do you prepare yourself?”
+        Example: "As you approach the shadowy figures, what's going through your mind? How do you prepare yourself?"
 
     Encourage Interaction: Prompt them to talk to each other in character.
 
-        Example: “The forest path splits in two. Do you take the left, which seems darker and more foreboding, or the right, which is quieter but feels… off? Discuss it among yourselves.”
+        Example: "The forest path splits in two. Do you take the left, which seems darker and more foreboding, or the right, which is quieter but feels… off? Discuss it among yourselves."
 
     Make Them the Heroes: Highlight their successes.
 
-        Example: “With a single, powerful swing, your sword cuts through the shadowy figure, dispersing it into a cloud of dark mist. The others recoil in fear!”
+        Example: "With a single, powerful swing, your sword cuts through the shadowy figure, dispersing it into a cloud of dark mist. The others recoil in fear!"
 
 3. Keep the Pace Up
 
     Fast-Paced Narration: During action scenes, describe things quickly and keep the energy high.
 
-        Example: “The shadow creature lunges at you, claws outstretched! What do you do?”
+        Example: "The shadow creature lunges at you, claws outstretched! What do you do?"
 
     Limit Long Descriptions in Combat: Focus on the key action and its immediate impact.
 
-        Example: “Your fireball explodes in the middle of the clearing, scorching the ground and sending the creatures flying back!”
+        Example: "Your fireball explodes in the middle of the clearing, scorching the ground and sending the creatures flying back!"
 
     Move Quickly Between Scenes: Once an encounter is over, transition smoothly to the next.
 
-        Example: “With the idol destroyed, the darkness lifts from the forest. You make your way back to Black Hollow, the villagers cheering as you arrive.”
+        Example: "With the idol destroyed, the darkness lifts from the forest. You make your way back to Black Hollow, the villagers cheering as you arrive."
 
 4. Use NPCs to Add Flavor
 
@@ -292,7 +294,7 @@ How to DM the encounter
 
     Leave a Hook: If you think they might want to play again, hint at future adventures.
 
-        Example: “As you leave the village, you notice a strange symbol carved into the gate. It wasn't there before…”
+        Example: "As you leave the village, you notice a strange symbol carved into the gate. It wasn't there before…"
         
 Scene 1: The Village of Black Hollow
 
@@ -315,3 +317,4 @@ error_responses = [
     "An otherworldly force intervenes, preventing me from seeing the result. Shall we defy it with another try?",
     "The veil between worlds thickens, hiding the consequences from my sight. Please restate your intention."
 ]
+
