@@ -1,0 +1,16 @@
+{
+    "resource":"/{id}",
+    "path":"/if",
+    "httpMethod":"POST",
+    "headers":null,
+    "multiValueHeaders":null,
+    "queryStringParameters":null,
+    "multiValueQueryStringParameters":null,
+    "pathParameters":{"id":"if"},
+    "stageVariables":null,
+    "requestContext":{
+        "resourceId":"n4qmy3",
+        "resourcePath":"/{id}",
+        "httpMethod":"POST",
+        "extendedRequestId":"f8yDDHAjSK4Fq3Q=","requestTime":"20/Oct/2024:12:53:26 +0000","path":"/{id}","accountId":"384383477717","protocol":"HTTP/1.1","stage":"test-invoke-stage","domainPrefix":"testPrefix","requestTimeEpoch":1729428806467,"requestId":"8491a612-6877-492c-b095-67c87a1c2139","identity":{"cognitoIdentityPoolId":null,"cognitoIdentityId":null,"apiKey":"test-invoke-api-key","principalOrgId":null,"cognitoAuthenticationType":null,"userArn":"arn:aws:iam::384383477717:root","apiKeyId":"test-invoke-api-key-id","userAgent":"Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:131.0) Gecko/20100101 Firefox/131.0","accountId":"384383477717","caller":"384383477717","sourceIp":"test-invoke"}}
+}

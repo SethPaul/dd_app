@@ -2,18 +2,26 @@ import json
 import openai
 import os
 import boto3
-from openai import OpenAI
+from openai import OpenAI, AssistantEventHandler
 import structlog
 import random
+
+from typing_extensions import override
 
 logger = structlog.get_logger(__name__)
 
 ASSISTANT_ID = os.getenv('ASSISTANT_ID', 'asst_JVSlwnmtTuU58GOrCkD9x11b')
 
+domain = os.getenv('DOMAIN')
+stage = os.getenv('STAGE')
+apig_management_client = boto3.client(
+    "apigatewaymanagementapi", endpoint_url=f"https://{domain}/{stage}"
+)
+
 # One time creation of the assistant
-def create_assistant(client):
+async def create_assistant(client):
     logger.info("Creating assistant")
-    assistant = client.beta.assistants.create(
+    assistant = await client.beta.assistants.create(
         name="Dungeon Master",
         instructions=assistant_instructions,
         model="gpt-4o-mini",
@@ -21,13 +29,13 @@ def create_assistant(client):
     logger.info("Created assistant", assistant_id=assistant.id)
     return assistant.id
 
-def create_thread(client):
+async def create_thread(client):
     logger.info("Creating thread")
-    thread = client.beta.threads.create()
+    thread = await client.beta.threads.create()
     logger.info("Thread created", thread_id=thread.id)
     return thread.id
 
-def setup_llm():
+async def setup_llm():
     logger.info("Setting up LLM")
     secret_client = boto3.client('secretsmanager')
 
@@ -41,7 +49,7 @@ def setup_llm():
         logger.error("Error setting up LLM", error=str(e))
         raise
 
-def generate_character_bios(client, users, thread_id):
+async def generate_character_bios(client, users, thread_id, stream_to_connections):
     logger.info("Generating character bios", users=users, thread_id=thread_id)
     if not users:
         logger.warning("No users provided for character bio generation")
@@ -53,26 +61,37 @@ def generate_character_bios(client, users, thread_id):
             role="user",
             content=[{"type": "text", "text": json.dumps(users)}]
         )
+        additional_instructions="return the generated character bios in a json object list with an object for each supplied user"
+        if stream_to_connections:
+            with client.beta.threads.runs.stream(
+                thread_id=thread_id,
+                assistant_id=ASSISTANT_ID,
+                additional_instructions=additional_instructions,
+                event_handler=EventHandler(),
+            ) as stream:
+                stream.until_done()
 
-        run = client.beta.threads.runs.create_and_poll(
-            thread_id=thread_id,
-            assistant_id=ASSISTANT_ID,
-            additional_instructions="return the generated character bios in a json object list with an object for each supplied user"
-        )
 
-        if run.status == 'completed':
-            messages = client.beta.threads.messages.list(thread_id=thread_id)
-            response_text = messages.data[0].content[0].text.value
-            logger.info("Character bios generated successfully")
-            try:
-                bios_dict = json.loads(response_text)
-                return bios_dict['characters']
-            except json.JSONDecodeError:
-                logger.warning("Invalid JSON response for character bios", response=response_text)
-                return response_text
-        else:
-            logger.error("Character bio generation failed", status=run.status)
-            return {}
+        else: 
+            run = client.beta.threads.runs.create_and_poll(
+                thread_id=thread_id,
+                assistant_id=ASSISTANT_ID,
+                additional_instructions=additional_instructions,
+            )
+
+            if run.status == 'completed':
+                messages = client.beta.threads.messages.list(thread_id=thread_id)
+                response_text = messages.data[0].content[0].text.value
+                logger.info("Character bios generated successfully")
+                try:
+                    bios_dict = json.loads(response_text)
+                    return bios_dict['characters']
+                except json.JSONDecodeError:
+                    logger.warning("Invalid JSON response for character bios", response=response_text)
+                    return response_text
+            else:
+                logger.error("Character bio generation failed", status=run.status)
+                return {}
     except Exception as e:
         logger.error("Error generating character bios", error=str(e))
         raise
@@ -107,41 +126,76 @@ def transform_to_html(character_json):
         logger.error("Error transforming character JSON to HTML", error=str(e), character_json=character_json)
         raise
 
-def process_action(client, thread_id, action):
+async def process_action(client, thread_id, action, stream_to_connections):
     logger.info("Processing action", thread_id=thread_id, action=action)
     try:
-        message = client.beta.threads.messages.create(
+        message = await client.beta.threads.messages.create(
             thread_id=thread_id,
             role="user",
             content=[{"type": "text", "text": json.dumps(action)}]
         )
-
-        run = client.beta.threads.runs.create_and_poll(
-            thread_id=thread_id,
-            assistant_id=ASSISTANT_ID
-        )
-
-        if run.status == 'completed':
-            messages = client.beta.threads.messages.list(thread_id=thread_id)
-            assistant_reply = json.loads(messages.data[0].content[0].text.value)
-            logger.info("Action processed successfully")
-            return assistant_reply['msg']
+        if stream_to_connections:
+            with client.beta.threads.runs.stream(
+                thread_id=thread_id,
+                assistant_id=ASSISTANT_ID,
+                event_handler=EventHandler(stream_to_connections),
+            ) as stream:
+                stream.until_done()
         else:
-            logger.error("Action processing failed", status=run.status)
-            
-            return 'Some evil force muddled my mind. Please try again.'
+            run = await client.beta.threads.runs.create_and_poll(
+                thread_id=thread_id,
+                assistant_id=ASSISTANT_ID
+            )
+
+            if run.status == 'completed':
+                messages = await client.beta.threads.messages.list(thread_id=thread_id)
+                assistant_reply = json.loads(messages.data[0].content[0].text.value)
+                logger.info("Action processed successfully")
+                return assistant_reply['msg']
+            else:
+                logger.error("Action processing failed", status=run.status)
+                
+                return random.choice(error_responses)
     except Exception as e:
         logger.error("Error processing action", error=str(e))
         return random.choice(error_responses)
 
-def delete_thread(client, thread_id):
+async def delete_thread(client, thread_id):
     logger.info("Deleting thread", thread_id=thread_id)
     try:
-        client.beta.threads.delete(thread_id)
+        await client.beta.threads.delete(thread_id)
         logger.info("Thread deleted successfully", thread_id=thread_id)
     except Exception as e:
         logger.error("Error deleting thread", thread_id=thread_id, error=str(e))
         raise
+
+class EventHandler(AssistantEventHandler):
+    def __init__(self, stream_to_connections):
+        self.stream_to_connections = stream_to_connections
+
+    @override
+    def on_text_created(self, text) -> None:
+        self.stream_to_connections(text)
+
+    @override
+    def on_text_delta(self, delta, snapshot):
+        self.stream_to_connections(delta.value)
+      
+    @override
+    def on_tool_call_created(self, tool_call):
+        self.stream_to_connections(f"\nassistant > {tool_call.type}\n")
+  
+    @override
+    def on_tool_call_delta(self, delta, snapshot):
+        if delta.type == 'code_interpreter':
+            if delta.code_interpreter.input:
+                self.stream_to_connections(delta.code_interpreter.input)
+            if delta.code_interpreter.outputs:
+                self.stream_to_connections(f"\n\noutput >")
+                for output in delta.code_interpreter.outputs:
+                    if output.type == "logs":
+                        self.stream_to_connections(f"\n{output.logs}")
+
 
 # The assistant_instructions variable remains unchanged
 assistant_instructions =  """
