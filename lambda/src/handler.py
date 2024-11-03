@@ -1,5 +1,3 @@
-
-import boto3
 import structlog
 from utils.http_handler import handle_http_request
 from utils.websocket_handler import handle_websocket_connection
@@ -19,13 +17,21 @@ dynamodb = session.resource('dynamodb')
 logger = structlog.get_logger(__name__)
 
 
-async def lambda_handler(event, context):
+def lambda_handler(event, context):
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(async_handler(event, context))
+
+async def async_handler(event, context):
     structlog.contextvars.clear_contextvars()
     logger.info("Lambda function invoked", requestevent=event)
     async with session.resource('dynamodb') as dynamodb:
-        table = await dynamodb.Table('DungeonsAndDragonsSessions')
+        session_table = await dynamodb.Table('DungeonsAndDragonsSessions')
+        ## TODO: Add connection only table
+        ## TODO: add lock on session table to prevent race condition
+        connection_table = await dynamodb.Table('DungeonsAndDragonsConnections')
+
         # Get HTTP method and session ID
         if 'httpMethod' in event:
-            return await handle_http_request(event, table, llm_client)
+            return await handle_http_request(event, session_table, connection_table, llm_client)
         else:
-            return await handle_websocket_connection(event, table, llm_client)
+            return await handle_websocket_connection(event, session_table, connection_table, llm_client)

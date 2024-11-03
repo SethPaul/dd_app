@@ -6,6 +6,11 @@ import utils.session_manager as session_manager
 logger = structlog.get_logger(__name__)
 
 
+import aioboto3
+
+session = aioboto3.Session()
+api_gateway_management_client = session.client('apigatewaymanagementapi')
+
 
 response_headers = {
     "Access-Control-Allow-Origin": "*",

@@ -3,10 +3,14 @@ import json
 import os
 import structlog
 import requests
+from dotenv import load_dotenv
 
 import pytest
 import yaml
 from pytest import param
+
+# Load environment variables from .env file
+load_dotenv()
 
 with open(f"{os.path.dirname(__file__)}/../../../samconfig.yaml", "rb") as f:
     samconfig_dict = yaml.safe_load(f)
@@ -14,7 +18,7 @@ with open(f"{os.path.dirname(__file__)}/../../../samconfig.yaml", "rb") as f:
 logger = structlog.get_logger()
 
 DEPLOY_ENV = os.getenv("DEPLOY_ENV", "default")
-API_URL = os.getenv("API_URL", "<API_URL>")
+API_URL = os.getenv("API_URL", "<API_URL>")  # This will now pull from .env file
 
 sessions = [
     {

@@ -62,36 +62,28 @@ async def generate_character_bios(client, users, thread_id, stream_to_connection
             content=[{"type": "text", "text": json.dumps(users)}]
         )
         additional_instructions="return the generated character bios in a json object list with an object for each supplied user"
-        if stream_to_connections:
-            with client.beta.threads.runs.stream(
-                thread_id=thread_id,
-                assistant_id=ASSISTANT_ID,
-                additional_instructions=additional_instructions,
-                event_handler=EventHandler(),
-            ) as stream:
-                stream.until_done()
+        
+        with client.beta.threads.runs.stream(
+            thread_id=thread_id,
+            assistant_id=ASSISTANT_ID,
+            additional_instructions=additional_instructions,
+            event_handler=EventHandler(stream_to_connections),
+        ) as stream:
+            stream.until_done()
 
-
-        else: 
-            run = client.beta.threads.runs.create_and_poll(
-                thread_id=thread_id,
-                assistant_id=ASSISTANT_ID,
-                additional_instructions=additional_instructions,
-            )
-
-            if run.status == 'completed':
-                messages = client.beta.threads.messages.list(thread_id=thread_id)
-                response_text = messages.data[0].content[0].text.value
-                logger.info("Character bios generated successfully")
-                try:
-                    bios_dict = json.loads(response_text)
-                    return bios_dict['characters']
-                except json.JSONDecodeError:
-                    logger.warning("Invalid JSON response for character bios", response=response_text)
-                    return response_text
-            else:
-                logger.error("Character bio generation failed", status=run.status)
-                return {}
+        if not stream_to_connections.connection_id:
+            messages = client.beta.threads.messages.list(thread_id=thread_id)
+            response_text = messages.data[0].content[0].text.value
+            logger.info("Character bios generated successfully")
+            try:
+                bios_dict = json.loads(response_text)
+                return bios_dict['characters']
+            except json.JSONDecodeError:
+                logger.warning("Invalid JSON response for character bios", response=response_text)
+                return response_text
+        else:
+            logger.error("Character bio generation failed")
+            return {}
     except Exception as e:
         logger.error("Error generating character bios", error=str(e))
         raise
@@ -134,28 +126,22 @@ async def process_action(client, thread_id, action, stream_to_connections):
             role="user",
             content=[{"type": "text", "text": json.dumps(action)}]
         )
-        if stream_to_connections:
-            with client.beta.threads.runs.stream(
-                thread_id=thread_id,
-                assistant_id=ASSISTANT_ID,
-                event_handler=EventHandler(stream_to_connections),
-            ) as stream:
-                stream.until_done()
+        with client.beta.threads.runs.stream(
+            thread_id=thread_id,
+            assistant_id=ASSISTANT_ID,
+            event_handler=EventHandler(stream_to_connections),
+        ) as stream:
+            stream.until_done()
+        
+        if not stream_to_connections.connection_id:
+            messages = client.beta.threads.messages.list(thread_id=thread_id)
+            assistant_reply = json.loads(messages.data[0].content[0].text.value)
+            logger.info("Action processed successfully")
+            return assistant_reply['msg']
         else:
-            run = client.beta.threads.runs.create_and_poll(
-                thread_id=thread_id,
-                assistant_id=ASSISTANT_ID
-            )
-
-            if run.status == 'completed':
-                messages = client.beta.threads.messages.list(thread_id=thread_id)
-                assistant_reply = json.loads(messages.data[0].content[0].text.value)
-                logger.info("Action processed successfully")
-                return assistant_reply['msg']
-            else:
-                logger.error("Action processing failed", status=run.status)
+            logger.error("Action processing failed")
                 
-                return random.choice(error_responses)
+            return random.choice(error_responses)
     except Exception as e:
         logger.error("Error processing action", error=str(e))
         return random.choice(error_responses)
@@ -171,6 +157,7 @@ async def delete_thread(client, thread_id):
 
 class EventHandler(AssistantEventHandler):
     def __init__(self, stream_to_connections):
+        super().__init__()
         self.stream_to_connections = stream_to_connections
 
     @override

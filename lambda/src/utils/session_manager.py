@@ -6,6 +6,13 @@ logger = structlog.get_logger(__name__)
 import utils.session_operations as session_operations
 import utils.prompt_helper as prompt_helper
 
+import aioboto3
+
+from botocore.exceptions import ClientError
+
+session = aioboto3.Session()
+api_gateway_management_client = session.client('apigatewaymanagementapi')
+
 
 
 async def get_session(table, session_id):
@@ -37,7 +44,7 @@ async def get_session(table, session_id):
 
     return response
 
-async def add_entry(table, llm_client, session_id, body, stream_to_connections=None):
+async def add_entry(table, llm_client, session_id, body, connection_id=None):
     logger.info("Adding entry to session")
     
     try:
@@ -45,6 +52,9 @@ async def add_entry(table, llm_client, session_id, body, stream_to_connections=N
         session = await session_operations.get_or_create_session(table, llm_client, session_id)
         
         bios_text = None
+        connection_ids = session.get('ConnectionIds', [])
+        stream_to_connections = StreamToConnections(api_gateway_management_client, connection_id, connection_ids)
+        await stream_to_connections(message= body)
 
         # Add new users to session
         if 'users' in body:
@@ -98,7 +108,7 @@ async def delete_session(table, session_id):
     client = prompt_helper.setup_llm()
     try:
         # Retrieve session from DynamoDB
-        session = table.get_item(Key={'SessionId': session_id})
+        session = await table.get_item(Key={'SessionId': session_id})
         if 'Item' in session:
             item = session['Item']
             thread_id = item.get('ThreadId')
@@ -110,7 +120,7 @@ async def delete_session(table, session_id):
 
             # Delete the session from DynamoDB
             logger.info("Deleting session from DynamoDB")
-            table.delete_item(Key={'SessionId': session_id})
+            await table.delete_item(Key={'SessionId': session_id})
 
             logger.info("Session deleted successfully")
             response = {
@@ -131,3 +141,32 @@ async def delete_session(table, session_id):
         }
 
     return response
+
+
+class StreamToConnections:  
+    def __init__(self, api_gateway_management_client, connection_id, connection_ids):
+        self.api_gateway_management_client = api_gateway_management_client
+        self._connection_id = connection_id
+        self.connection_ids = connection_ids
+    
+    @property
+    def connection_id(self):
+        return self._connection_id
+    
+    async def __call__(self, message):
+        logger.info("Streaming to connections", connection_id=self.connection_id, connection_ids=self.connection_ids)
+
+        for other_conn_id in self.connection_ids:
+            try:
+                if other_conn_id != self._connection_id:
+                    send_response = await self.api_gateway_management_client.post_to_connection(
+                        Data=message, ConnectionId=other_conn_id
+                    )
+            except ClientError:
+                logger.exception("Couldn't post to connection %s.", other_conn_id)
+            except self.api_gateway_management_client.exceptions.GoneException:
+                logger.info("Connection %s is gone, removing.", other_conn_id)
+                try:
+                    await self.table.delete_item(Key={"connection_id": other_conn_id})
+                except ClientError:
+                    logger.exception("Couldn't remove connection %s.", other_conn_id)

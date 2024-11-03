@@ -23,6 +23,9 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem                  
                   - dynamodb:PutItem
                 Resource: "*"
         - PolicyName: LambdaLogsPolicy

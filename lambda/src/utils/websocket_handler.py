@@ -4,9 +4,7 @@ import structlog
 import utils.session_operations as session_operations
 import utils.session_manager as session_manager
 
-from botocore.exceptions import ClientError
-
-
+from botocore.exceptions import ClientError 
 logger = structlog.get_logger(__name__)
 
 async def handle_websocket_connection(event, table, llm_client):
@@ -15,18 +13,21 @@ async def handle_websocket_connection(event, table, llm_client):
     connection_id = event.get("requestContext", {}).get("connectionId")
     domain_name = event.get("requestContext", {}).get("domainName")
     stage = event.get("requestContext", {}).get("stage")
+    body_str = event.get("body", '{"msg": ""}')
+    body = json.loads(body_str) if body_str is not None else {"msg": ""}
 
     logger.info("Websocket connection established", route_key=route_key, connection_id=connection_id, domain_name=domain_name, stage=stage)
-
+    session_id = event.get("queryStringParameters", {"session_id": "global"}).get("session_id")
+    if not session_id or session_id == "global":
+        logger.warning("No session id provided")
+        session_id = body.get("session_id", 'global')
+    structlog.contextvars.bind_contextvars(session_id=session_id)  
     response = {"statusCode": 200}
     if route_key == "$connect":
-        session_id = event.get("pathParameters", {}).get("id")
-        response["statusCode"] = await handle_connect(session_id, table, connection_id, )
+        response["statusCode"] = await handle_connect(session_id, table, connection_id, llm_client)
     elif route_key == "$disconnect":
-        response["statusCode"] = await handle_disconnect(session_id, table, connection_id)
+        response["statusCode"] = await handle_disconnect(session_id, table, connection_id, llm_client)
     elif route_key == "sendmessage":
-        body = event.get("body")
-        body = json.loads(body if body is not None else '{"msg": ""}')
         domain = event.get("requestContext", {}).get("domainName")
         stage = event.get("requestContext", {}).get("stage")
         if domain is None or stage is None:
@@ -40,7 +41,7 @@ async def handle_websocket_connection(event, table, llm_client):
         else:
   
             response["statusCode"] = await handle_message(
-                session_id, table, connection_id, body, apig_management_client, llm_client
+                session_id, table, connection_id, body, llm_client
             )
     else:
         response["statusCode"] = 404
@@ -59,6 +60,7 @@ async def handle_connect(session_id, table, connection_id, llm_client):
              to the DynamoDB table.
     """
     status_code = 200
+
     try:
         session = await session_operations.get_or_create_session(table, llm_client, session_id)
         # add the connection id to the session
@@ -73,7 +75,7 @@ async def handle_connect(session_id, table, connection_id, llm_client):
         status_code = 503
     return status_code
 
-async def handle_disconnect(session_id, table, connection_id):
+async def handle_disconnect(session_id, table, connection_id, llm_client):
     """
     Handles disconnections by removing the connection record from the DynamoDB table.
 
@@ -84,8 +86,8 @@ async def handle_disconnect(session_id, table, connection_id):
     """
     status_code = 200
     try:
-        session = await session_operations.get_session(table, session_id)
-        new_connection_ids = [conn_id for conn_id in session["ConnectionIds"] if conn_id != connection_id]
+        session = await session_operations.get_or_create_session(table, llm_client, session_id)
+        new_connection_ids = [conn_id for conn_id in session.get("ConnectionIds", []) if conn_id != connection_id]
         await session_operations.update_session_connection_ids(table, session_id, new_connection_ids)
         logger.info("Disconnected connection %s.", connection_id)
     except ClientError:
@@ -94,7 +96,7 @@ async def handle_disconnect(session_id, table, connection_id):
     return status_code
 
 
-async def handle_message(session_id, table, connection_id, event_body, api_gateway_management_client, llm_client):
+async def handle_message(session_id, table, connection_id, event_body, llm_client):
     """
     Handles messages sent by a participant in the chat. Looks up all connections
     currently tracked in the DynamoDB table, and uses the API Gateway Management API
@@ -113,40 +115,10 @@ async def handle_message(session_id, table, connection_id, event_body, api_gatew
              to all active connections.
     """
     status_code = 200
-    try:
-        session = await session_operations.get_session(table, session_id)
-        connection_ids = session["ConnectionIds"]
-    except ClientError:
-        logger.exception("Couldn't find connection ids.")
-        status_code = 404
-
-    stream_to_connections = StreamToConnections(api_gateway_management_client, table, session["ThreadId"], connection_id, connection_ids)
-    await session_manager.add_entry(table, llm_client, session_id, event_body, stream_to_connections)
+    try:    
+        await session_manager.add_entry(table, llm_client, session_id, event_body, connection_id)
+    except Exception as e:
+        logger.exception("Error adding entry", error=str(e), event_body=event_body)
+        status_code = 500
 
     return status_code
-
-class StreamToConnections:  
-    def __init__(self, api_gateway_management_client, table, thread_id, connection_id, connection_ids):
-        self.api_gateway_management_client = api_gateway_management_client
-        self.table = table
-        self.thread_id = thread_id
-        self.connection_id = connection_id
-        self.connection_ids = connection_ids
-
-    async def __call__(self, message):
-        logger.info("Streaming to connections", thread_id=self.thread_id, connection_id=self.connection_id, connection_ids=self.connection_ids)
-
-        for other_conn_id in self.connection_ids:
-            try:
-                if other_conn_id != self.connection_id:
-                    send_response = await self.api_gateway_management_client.post_to_connection(
-                        Data=message, ConnectionId=other_conn_id
-                    )
-            except ClientError:
-                logger.exception("Couldn't post to connection %s.", other_conn_id)
-            except self.api_gateway_management_client.exceptions.GoneException:
-                logger.info("Connection %s is gone, removing.", other_conn_id)
-                try:
-                    await self.table.delete_item(Key={"connection_id": other_conn_id})
-                except ClientError:
-                    logger.exception("Couldn't remove connection %s.", other_conn_id)
