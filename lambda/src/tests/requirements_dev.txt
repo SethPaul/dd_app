@@ -2,3 +2,4 @@
 pytest
 boto3
 PyYAML
+pytest-asyncio

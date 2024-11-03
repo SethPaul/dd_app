@@ -4,7 +4,7 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 import utils.session_operations as session_operations
-import prompt_helper
+import utils.prompt_helper as prompt_helper
 
 
 
@@ -37,7 +37,7 @@ async def get_session(table, session_id):
 
     return response
 
-async def add_entry(table, llm_client, session_id, body, stream_to_connections):
+async def add_entry(table, llm_client, session_id, body, stream_to_connections=None):
     logger.info("Adding entry to session")
     
     try:

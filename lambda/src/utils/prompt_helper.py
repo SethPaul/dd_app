@@ -19,9 +19,9 @@ apig_management_client = boto3.client(
 )
 
 # One time creation of the assistant
-async def create_assistant(client):
+def create_assistant(client):
     logger.info("Creating assistant")
-    assistant = await client.beta.assistants.create(
+    assistant = client.beta.assistants.create(
         name="Dungeon Master",
         instructions=assistant_instructions,
         model="gpt-4o-mini",
@@ -29,13 +29,13 @@ async def create_assistant(client):
     logger.info("Created assistant", assistant_id=assistant.id)
     return assistant.id
 
-async def create_thread(client):
+def create_thread(client):
     logger.info("Creating thread")
-    thread = await client.beta.threads.create()
+    thread = client.beta.threads.create()
     logger.info("Thread created", thread_id=thread.id)
     return thread.id
 
-async def setup_llm():
+def setup_llm():
     logger.info("Setting up LLM")
     secret_client = boto3.client('secretsmanager')
 
@@ -129,7 +129,7 @@ def transform_to_html(character_json):
 async def process_action(client, thread_id, action, stream_to_connections):
     logger.info("Processing action", thread_id=thread_id, action=action)
     try:
-        message = await client.beta.threads.messages.create(
+        message = client.beta.threads.messages.create(
             thread_id=thread_id,
             role="user",
             content=[{"type": "text", "text": json.dumps(action)}]
@@ -142,13 +142,13 @@ async def process_action(client, thread_id, action, stream_to_connections):
             ) as stream:
                 stream.until_done()
         else:
-            run = await client.beta.threads.runs.create_and_poll(
+            run = client.beta.threads.runs.create_and_poll(
                 thread_id=thread_id,
                 assistant_id=ASSISTANT_ID
             )
 
             if run.status == 'completed':
-                messages = await client.beta.threads.messages.list(thread_id=thread_id)
+                messages = client.beta.threads.messages.list(thread_id=thread_id)
                 assistant_reply = json.loads(messages.data[0].content[0].text.value)
                 logger.info("Action processed successfully")
                 return assistant_reply['msg']
@@ -163,7 +163,7 @@ async def process_action(client, thread_id, action, stream_to_connections):
 async def delete_thread(client, thread_id):
     logger.info("Deleting thread", thread_id=thread_id)
     try:
-        await client.beta.threads.delete(thread_id)
+        client.beta.threads.delete(thread_id)
         logger.info("Thread deleted successfully", thread_id=thread_id)
     except Exception as e:
         logger.error("Error deleting thread", thread_id=thread_id, error=str(e))

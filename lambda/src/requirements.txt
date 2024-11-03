@@ -2,3 +2,4 @@ openai
 structlog
 requests
 simplejson
+aioboto3

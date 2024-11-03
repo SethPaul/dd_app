@@ -1,10 +1,11 @@
 import structlog
 from . import prompt_helper
 
+
 logger = structlog.get_logger(__name__)
 
 async def create_session(table, client, session_id):
-    thread_id = await prompt_helper.create_thread(client)
+    thread_id = prompt_helper.create_thread(client)
     item = {
         'SessionId': session_id,
         'Users': [],
@@ -52,7 +53,7 @@ async def update_bios_as_needed(table, client, body, item, stream_to_connections
                 item['Users'].append(user)
         
     if new_users:
-        new_user_bios_json = prompt_helper.generate_character_bios(
+        new_user_bios_json =  await prompt_helper.generate_character_bios(
                 client=client,
                 thread_id=item['ThreadId'],
                 users=new_users,
