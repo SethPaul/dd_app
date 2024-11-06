@@ -40,9 +40,18 @@
     };
   });
 
+  function toTitleCase(str) {
+    return str.split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  }
+
   async function addPerson() {
     if (name && role) {
-      group = [...group, { name, role }];
+      group = [...group, { 
+        name: toTitleCase(name), 
+        role: toTitleCase(role) 
+      }];
       name = "";
       role = "";
       currentPerson++;
