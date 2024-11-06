@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  import Chat from "./Chat.svelte";
+  import { marked } from 'marked';
 
   let groupSize = 0;
   let group = [];
@@ -10,17 +10,83 @@
   let role = "";
   let sessionId;
 
+  // Add new websocket-related state
+  let wsMessages = [];
+  let ws;
+  let user_bios = [];
+
+  let isResizing = false;
+  let startX;
+  let startWidth;
+
+  let message = "";
+  let selectedName = "";
+
+  async function fetchSessionData(sessionId) {
+    try {
+      const response = await fetch(`https://bx9qs5sk31.execute-api.us-west-1.amazonaws.com/dev/${sessionId}`, {
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "*",
+        }
+      });
+      if (!response.ok) {
+        throw new Error('Session not found');
+      }
+      const data = await response.json();
+      // Update storyHtml with previous messages instead of wsMessages
+      if (data.users) {
+        group = data.users;
+        isSetupComplete = true; 
+      }
+      if (data.user_bios) {
+        user_bios = Object.values(data.user_bios).join('\n\n_____________________\n\n\n\n_____________________\n\n');
+      }
+      if (data.chat_history) {
+        data.chat_history.forEach(message => {
+          if (message.role === 'user') {
+            storyHtml += `<p><span class="user-name">${message.content.charAt(0).toUpperCase() + message.content.slice(1)}</span></p>`;
+          } else {
+            storyHtml += `<p><span class="ai-name">Dungeon Master: ${message.content.charAt(0).toUpperCase() + message.content.slice(1)}</span></p>`;
+          }
+          scrollToBottom();
+        });
+      }
+      scrollToBottom();
+    } catch (error) {
+      console.error('Error fetching session:', error);
+    }
+  }
+
   // Generate random session ID and update URL
-  onMount(() => {
-    const pathSessionId = window.location.pathname.slice(1); // Remove leading slash
-    if (pathSessionId) {
-      sessionId = pathSessionId;
+  onMount(async () => {
+    // Check URL search params
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlSessionId = urlParams.get('session');
+    
+    if (urlSessionId) {
+      sessionId = urlSessionId;
+      await fetchSessionData(sessionId);
     } else {
-      // Generate random session ID if none in URL
+      // Generate random session ID if none exists
       sessionId = Math.random().toString(36).substring(2, 15);
       // Update URL without page reload
-      window.history.pushState({}, '', `/${sessionId}`);
+      window.history.pushState({}, '', `/?session=${sessionId}`);
     }
+
+    // Setup WebSocket connection
+    ws = new WebSocket(`wss://2myr6m0jz5.execute-api.us-west-1.amazonaws.com/dev?session_id=${sessionId}`);
+    
+    ws.onmessage = (event) => {
+      const message = event.data;
+      // Update story HTML with the new message
+      storyHtml += message;
+      scrollToBottom();
+    };
+
+    return () => {
+      if (ws) ws.close();
+    };
   });
 
   async function addPerson() {
@@ -33,6 +99,7 @@
         // Setup complete
         isSetupComplete = true;
         await sendRolesToBackend(group);  // Send roles to backend after setup
+        
       }
     }
   }
@@ -68,59 +135,162 @@ She points to a dark, twisted path leading into the forest. The party begins dow
       
       // Update the story HTML with the received data
       if (response_text) {
-        storyHtml = response_text;
+        user_bios = response_text;
       }
       
     } catch (error) {
       console.error("Error sending roles:", error);
     }
   }
+
+  // Add this function to handle scrolling
+  function scrollToBottom() {
+    const storyContainer = document.querySelector('.story-container');
+    if (storyContainer) {
+      storyContainer.scrollTop = storyContainer.scrollHeight ;
+    }
+  }
+
+  function startResize(e) {
+    isResizing = true;
+    startX = e.clientX;
+    startWidth = document.querySelector('.sidebar').offsetWidth;
+    
+    // Add event listeners for dragging
+    document.addEventListener('mousemove', resize);
+    document.addEventListener('mouseup', stopResize);
+  }
+
+  function resize(e) {
+    if (!isResizing) return;
+    
+    const width = startWidth + (e.clientX - startX);
+    const sidebar = document.querySelector('.sidebar');
+    const main = document.querySelector('main');
+    
+    // Set min and max widths
+    if (width > 100 && width < window.innerWidth * 0.8) {
+      sidebar.style.width = `${width}px`;
+      main.style.marginLeft = `${width}px`;
+      main.style.width = `calc(100% - ${width}px)`;
+    }
+  }
+
+  function stopResize() {
+    isResizing = false;
+    document.removeEventListener('mousemove', resize);
+    document.removeEventListener('mouseup', stopResize);
+  }
+
+  async function sendMessage() {
+    if (selectedName && message) {
+      let chatMessage = { user: selectedName, msg: message };
+
+      message = "";
+      
+      try {
+        const response = await fetch(`${backendUrl}/${sessionId}`, {
+          method: "POST",
+          headers: { 
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+          },
+          body: JSON.stringify(chatMessage)
+        });
+        const response_text = await response.text();
+        scrollToBottom();
+        console.log("Chat response:", response_text);
+      } catch (error) {
+        console.error("Error:", error);
+      }
+    }
+  }
+
+  async function handleKeyPress(event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      await sendMessage();
+    }
+  }
 </script>
 
-<main>
-	<h2>Hi 👋 Saga Product Team!</h2>
-	<h1>Welcome to The Cursed Idol of Black Hollow <br> 🪄🌑🖤✨👻🌌</h1>
-  <p>Session ID: {sessionId}</p>
-  <br>
-	<div class="story-container">
-		{@html storyHtml}
-	</div>
-	<br>
-	{#if !isSetupComplete}
-		<div class="container">
-			<h2>Enter the number of people in your group:</h2>
-			<input class="member-number" type="number" bind:value={groupSize} />
+<div class="layout">
+  <aside class="sidebar">
+    <h3>Party</h3>
+    {#if user_bios.length > 0}
+      <div class="party-bios">
+        {@html marked(user_bios)}
+      </div>
+    {/if}
+    <div class="message-container">
+      {#each wsMessages as message}
+        <div class="message">
+          <span class="timestamp">{new Date(message.timestamp).toLocaleTimeString()}</span>
+          <p>{message.content}</p>
+        </div>
+      {/each}
+    </div>
+    <div class="resize-handle" on:mousedown={startResize}></div>
+  </aside>
 
-			{#if groupSize > 0 && currentPerson < groupSize}
-				<h2>Enter Name and Role for Person {currentPerson + 1}</h2>
-				<input type="text" placeholder="Name" bind:value={name} />
-				<input type="text" placeholder="Role" bind:value={role} />
-				<button on:click={addPerson}>Add Person</button>
-			{/if}
-		</div>
-	{:else}
-		<!-- Once group setup is done, move to chat -->
-		<Chat {group} sessionId={sessionId} />
-	{/if}
-</main>
+  <main>
+    <h2>Hi 👋 Saga Product Team!</h2>
+    <h1>Welcome to The Cursed Idol of Black Hollow <br> 🪄🌑🖤✨👻🌌</h1>
+    <p>Session ID: {sessionId}</p>
+    <br>
+    <div class="story-container">
+      {@html storyHtml}
+    </div>
+    <br>
+    {#if !isSetupComplete}
+      <div class="container">
+        <h2>Enter the number of people in your group:</h2>
+        <input class="member-number" type="number" bind:value={groupSize} />
+
+        {#if groupSize > 0 && currentPerson < groupSize}
+          <h2>Enter Name and Role for Person {currentPerson + 1}</h2>
+          <input type="text" placeholder="Name" bind:value={name} />
+          <input type="text" placeholder="Role" bind:value={role} />
+          <button on:click={addPerson}>Add Person</button>
+        {/if}
+      </div>
+    {:else}
+      <div class="chat-controls">
+        <select class="role-selection" bind:value={selectedName}>
+          <option value="" disabled selected>Select Role</option>
+          {#each group as person}
+            <option value={person.name}>{person.name} ({person.role})</option>
+          {/each}
+        </select>
+
+        <textarea 
+          class="chat-input" 
+          bind:value={message} 
+          placeholder="Type your message" 
+          rows="4" 
+          on:keydown={handleKeyPress}
+        ></textarea>
+        <button on:click={sendMessage}>Send</button>
+      </div>
+    {/if}
+  </main>
+</div>
 
 <style>
   main {
-    position: absolute;           /* Allows for positioning the element relative to the body */
-    top: 50%;                    /* Position it 50% from the top */
-    left: 50%;                   /* Position it 50% from the left */
-    transform: translate(-50%, -50%); /* Shift the element back by half its height and width */
-    text-align: center;          /* Center the text inside the main element */
-    padding: 1em;                /* Add padding */
-    max-width: 80vw;            /* Set max width */
-    background: #F3F4F4;         /* Background color */
-    font-family: 'Montserrat', sans-serif; /* Font family */
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Optional: adds a subtle shadow */
-    border-radius: 10px;
+    width: calc(100% - 300px);  /* Start with a reasonable default width */
+    margin-left: 300px;         /* Match the sidebar width */
     padding: 30px;
-    width: 80%;
-    margin: 0 auto;
+    text-align: center;
+    background: #F3F4F4;
+    font-family: 'Montserrat', sans-serif;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    height: 100vh;
+    overflow-y: auto;
   }
+
   .container {
     background: linear-gradient(to right, rgba(255, 89, 90, 0.5), rgba(110, 211, 75, 0.5), rgba(30, 206, 202, 0.5), rgba(0, 98, 152, 0.5)); /* Adjust alpha (0.7) as needed */
     border-radius: 10px;
@@ -142,6 +312,7 @@ She points to a dark, twisted path leading into the forest. The party begins dow
 	@media (min-width: 640px) {
 		main {
 			max-width: none;
+			margin: 0 0 0 300px;      /* Only set left margin */
 		}
 	}
 
@@ -153,6 +324,7 @@ She points to a dark, twisted path leading into the forest. The party begins dow
     border-radius: 5px;
     background-color: #fff;
     text-align: left;
+    scroll-behavior: smooth;
   }
 
   .story-container :global(p) {
@@ -162,5 +334,131 @@ She points to a dark, twisted path leading into the forest. The party begins dow
 
   .story-container :global(p:last-child) {
     margin-bottom: 0;
+  }
+
+  /* Add new sidebar styles */
+  .layout {
+    display: flex;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 300px;
+    height: 100vh;
+    background: #2c3e50;
+    color: white;
+    padding: 1em;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+    overflow-y: auto;
+  }
+
+  .resize-handle {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    cursor: ew-resize;
+  }
+
+  .resize-handle:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  /* Add a style to prevent text selection while resizing */
+  .layout.resizing {
+    user-select: none;
+  }
+
+  .message-container {
+    height: calc(100vh - 4em);
+    overflow-y: auto;
+    padding-right: 10px;
+  }
+
+  .message {
+    background: rgba(255, 255, 255, 0.1);
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 5px;
+  }
+
+  .timestamp {
+    font-size: 0.8em;
+    color: #95a5a6;
+  }
+
+  .message p {
+    margin: 5px 0 0 0;
+  }
+
+  .party-bios {
+    padding: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  .bio-entry {
+    margin: 0.5em 0;
+  }
+
+  .bio-entry h4 {
+    margin: 0;
+    color: #ecf0f1;
+  }
+
+  .bio-entry p {
+    margin: 0.2em 0 0 0;
+    font-size: 0.9em;
+    color: #bdc3c7;
+  }
+
+  .story-container :global(.user-name) {
+    color: #2c3e50;
+    font-weight: bold;
+  }
+
+  .story-container :global(.ai-name) {
+    color: #3498db;
+    font-weight: bold;
+  }
+
+  .chat-controls {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 20px;
+  }
+
+  .chat-input {
+    border-radius: 10px;
+    padding: 0.5rem;
+    color: rgba(0, 98, 152);
+    width: 100%;
+  }
+
+  .role-selection {
+    border-radius: 10px;
+    padding: 0.5rem;
+    background: linear-gradient(to right, rgba(255, 89, 90, 0.3), rgba(110, 211, 75, 0.3), rgba(30, 206, 202, 0.3), rgba(0, 98, 152, 0.3));
+  }
+
+  button {
+    padding: 10px 20px;
+    border-radius: 10px;
+    background: rgba(0, 98, 152, 0.8);
+    color: white;
+    border: none;
+    cursor: pointer;
+  }
+
+  button:hover {
+    background: rgba(0, 98, 152, 1);
   }
 </style>

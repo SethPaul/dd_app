@@ -1,18 +1,38 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
     "configurations": [
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Launch Chrome against localhost",
+            "url": "http://localhost:${command:vite-dev-server.port}",
+            "webRoot": "${workspaceFolder}",
+            "sourceMaps": true,
+            "preLaunchTask": "Wait for Vite dev server"
+        },
         {
             "command": "npm run dev --env-file=.env",
             "name": "Run development server",
             "request": "launch",
             "type": "node-terminal"
-            
-}
-        
-          
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Compound",
+            "configurations": ["Run development server", "Launch Chrome against localhost"]
+        }
+    ],
+    "preDebugTask": "Wait for Vite dev server",
+    "tasks": [
+        {
+            "label": "Wait for Vite dev server",
+            "type": "shell",
+            "command": "while ! nc -z localhost $(lsof -i:* | grep vite | grep -o '[0-9]\\{4,5\\}' | head -n 1); do sleep 1; done",
+            "windows": {
+                "command": "powershell -Command \"while (!(Test-NetConnection localhost -Port $(netstat -ano | findstr 'LISTENING' | findstr 'vite' | %{$_.Split()[1].Split(':')[1]} | Select -First 1)).TcpTestSucceeded) { Start-Sleep -Seconds 1 }"
+            }
+        }
     ]
 }
        
