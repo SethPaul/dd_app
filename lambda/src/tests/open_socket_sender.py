@@ -38,34 +38,31 @@ async def chat_demo(uri):
     :param uri: The websocket URI of the chat application.
     """
     print(f"Connecting to {uri}")
-    session_id = str(uuid.uuid4())
-    async def receiver(name):
-        async with websockets.connect(uri=f"{uri}?session_id={session_id}") as socket:
-            logger.info(f"> Connected to {uri}. Hello, {name}!")
-            msg = ""
-            while "Bye" not in msg:
-                msg = await socket.recv()
-                logger.info(f"> {name} got message: {msg}")
-
+    # session_id = str(uuid.uuid4())
+    session_id = "test-session-id"
+    
     async def sender(name):
         async with websockets.connect(uri=f"{uri}?session_id={session_id}") as socket:
-            # for msg in ("Hey everyone!", "Not much to say...", "Bye!"):
-            await asyncio.sleep(1)
-            # print(f"< {name}: {msg}")
+            # for msg in ('foo', 'bar', 'baz'):
+            #     await asyncio.sleep(1)
+            #     print(f"< {name}: {msg}")         
             await socket.send(json.dumps({"action": "sendmessage", "msg": {
-                'user': "Seth",
-                'msg': 'I cast a fireball at the enemies.',
-                'session_id': session_id
+            'user': "Seth",
+            'msg': 'I cast a fireball at the enemies.',
+            'session_id': session_id
             }}))
 
     await asyncio.gather(
-        *(receiver(user) for user in ("Bill", "Jeff", "Steve")), sender("DemoDude")
+        sender("DemoDude")
     )
 
 
-
+def main():
+    load_dotenv()
+    # uri = os.getenv("WEBSOCKET_URL")
+    # uri="wss://j1n451vl6g.execute-api.us-west-1.amazonaws.com/test"
+    uri="wss://2myr6m0jz5.execute-api.us-west-1.amazonaws.com/dev"
+    asyncio.run(chat_demo(uri))
 
 if __name__ == "__main__":
-    load_dotenv()
-    uri = os.getenv("WEBSOCKET_URL")
-    asyncio.run(chat_demo(uri))
+    main()

@@ -6,10 +6,7 @@ import utils.session_manager as session_manager
 logger = structlog.get_logger(__name__)
 
 
-import aioboto3
-
-session = aioboto3.Session()
-api_gateway_management_client = session.client('apigatewaymanagementapi')
+import boto3
 
 
 response_headers = {
@@ -19,21 +16,26 @@ response_headers = {
     "Content-Type": "text/html"
 }
 
-async def handle_http_request(event, table, llm_client):
+def handle_http_request(event, session_table, connection_table, llm_client):
     method = event['httpMethod']
     session_id = event['pathParameters']['id']
     structlog.contextvars.bind_contextvars(session_id=session_id)   
 
     if method == 'GET':
         logger.info("Handling GET request")
-        response = await session_manager.get_session(table, session_id)
+        response = session_manager.get_session(session_table, session_id)
     elif method == 'POST':
         logger.info("Handling POST request")
         body = json.loads(event['body'])
-        response = await session_manager.add_entry(table, llm_client, session_id, body)
+        domain = event.get("requestContext", {}).get("domainName")
+        stage = event.get("requestContext", {}).get("stage")
+        api_gateway_management_client = boto3.client(
+            "apigatewaymanagementapi", endpoint_url=f"https://{domain}/{stage}"
+        )
+        response = session_manager.add_entry(session_table, llm_client, session_id, body, connection_table, api_gateway_management_client)
     elif method == 'DELETE':
         logger.info("Handling DELETE request")
-        response = await session_manager.delete_session(table, session_id)
+        response = session_manager.delete_session(session_table, session_id, connection_table)
     else:
         logger.warning("Unsupported HTTP method", method=method)
         response = {

@@ -1,6 +1,7 @@
 import json
 import uuid
 from handler import lambda_handler
+import pytest
 
 # Sample event templates
 def generate_get_event(session_id):
@@ -38,19 +39,6 @@ sample_body_without_users = {
 }
 sample_body = sample_body_without_user_or_msg | sample_body_without_users
 
-def test_get_session_success():
-    # Arrange
-    event = generate_get_event("existing-session")
-
-    # Act
-    response = lambda_handler(event, None)
-
-    # Assert
-    assert response['statusCode'] == 200
-    body = json.loads(response['body'])
-    assert body['users'] == sample_users
-
-
 def test_get_session_not_found():
     # Arrange
     event = generate_get_event('non-existent-session')
@@ -63,7 +51,7 @@ def test_get_session_not_found():
     body = json.loads(response['body'])
     assert 'error' in body
 
-def test_post_session_new():
+def test_session_lifecycle():
     # Arrange
     random_session_id = str(uuid.uuid4())
     event = generate_post_event(random_session_id, sample_body)
@@ -72,24 +60,33 @@ def test_post_session_new():
     response = lambda_handler(event, None)
 
     # Assert
-    assert response['statusCode'] == 200
+    assert response['statusCode'] == 200, f"Failed to create session: {response['body']}"
     body = json.loads(response['body'])
-
-    # delete the session
-    lambda_handler(generate_delete_event(random_session_id), None)
-
-def test_post_session_existing():
-    # Arrange
-    
-    event = generate_post_event("existing-session", sample_body)
 
     # Act
-    response = lambda_handler(event, None)
+    response = lambda_handler(generate_get_event(random_session_id), None)
 
     # Assert
-    assert response['statusCode'] == 200
+    assert response['statusCode'] == 200, f"Failed to get session: {response['body']}"
     body = json.loads(response['body'])
-    assert body != None
+    assert body['users'] == sample_users
+
+    # Act 
+    response = lambda_handler(generate_post_event(random_session_id, sample_body_without_users), None)
+    assert response['statusCode'] == 200, f"Failed to add user to session: {response['body']}"
+
+    # Act   
+    response = lambda_handler(generate_post_event(random_session_id, sample_body), None)
+    assert response['statusCode'] == 200, f"Failed to add message to session: {response['body']}"
+
+    # Act
+    # delete the session
+    response = lambda_handler(generate_delete_event(random_session_id), None)
+
+    # Assert
+    assert response['statusCode'] == 200, f"Failed to delete session: {response['body']}"
+    body = json.loads(response['body'])
+    assert body['message'] == 'Session deleted successfully'
 
 def test_post_invalid_method():
     # Arrange

@@ -14,18 +14,35 @@ Parameters:
 
 Resources:
 
-  # DynamoDB Table
   DDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: !Ref AWS::StackName
+      TableName: !Sub ${AWS::StackName}-sessions
       AttributeDefinitions:
-        - AttributeName: SessionId
+        - AttributeName: session_id
           AttributeType: S
       KeySchema:
-        - AttributeName: SessionId
+        - AttributeName: session_id
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: expiration_time
+        Enabled: true
+
+  ConnectionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub ${AWS::StackName}-connections
+      AttributeDefinitions:
+        - AttributeName: connection_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: connection_id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      TimeToLiveSpecification:
+        AttributeName: expiration_time
+        Enabled: true
 
   # API Gateway Rest API
   DungeonMasterApi:

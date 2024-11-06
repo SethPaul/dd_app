@@ -1,32 +1,32 @@
 import json
+import os
 import random
 import structlog
+import boto3
 
 logger = structlog.get_logger(__name__)
 import utils.session_operations as session_operations
 import utils.prompt_helper as prompt_helper
-
-import aioboto3
+from openai.types.beta.threads.text import Text
 
 from botocore.exceptions import ClientError
 
-session = aioboto3.Session()
-api_gateway_management_client = session.client('apigatewaymanagementapi')
 
-
-
-async def get_session(table, session_id):
+def get_session(session_table, session_id):
     logger.info("Retrieving session")
     try:
         # Retrieve session from DynamoDB
-        session = await session_operations.get_session(table, session_id) 
+        session = session_operations.get_session(
+            session_table=session_table, 
+            session_id=session_id
+        )
         if session:
             logger.info("Session retrieved successfully")
             response = {
                 'statusCode': 200,
                 'body': json.dumps({
-                    'users': session.get('Users', []),
-                    'dialogue': session.get('Dialogue', [])
+                    'users': session.get('user_set', []),
+                    'dialogue': session.get('dialogue', [])
                 })
             }
         else:
@@ -36,7 +36,11 @@ async def get_session(table, session_id):
                 'body': json.dumps({'error': 'Session not found'}),
             }
     except Exception as e:
-        logger.error("Error retrieving session", error=str(e), exc_info=e)
+        logger.error(
+            "Error retrieving session", 
+            error=str(e), 
+            exc_info=e
+        )
         response = {
             'statusCode': 500,
             'body': json.dumps({'error': str(e)}),
@@ -44,83 +48,133 @@ async def get_session(table, session_id):
 
     return response
 
-async def add_entry(table, llm_client, session_id, body, connection_id=None):
+def add_entry(session_table, llm_client, session_id, message, connection_table, connection_id=None, api_gateway_management_client=None):
     logger.info("Adding entry to session")
     
     try:
         # Retrieve existing session or create a new one
-        session = await session_operations.get_or_create_session(table, llm_client, session_id)
-        
-        bios_text = None
-        connection_ids = session.get('ConnectionIds', [])
-        stream_to_connections = StreamToConnections(api_gateway_management_client, connection_id, connection_ids)
-        await stream_to_connections(message= body)
+        session = session_operations.get_or_create_session(
+            session_table=session_table,
+            llm_client=llm_client,
+            session_id=session_id
+        )
+        processing_check = session_operations.check_processing_flag_to_session(
+            session_table=session_table,
+            session_id=session_id
+        )
+        if processing_check:
+            return {
+                'statusCode': 200,
+                'body': "Wait a moment, I'm still divining what happened with the last action.",
+            }
+        stream_to_connections = StreamToConnections(
+            api_gateway_management_client=api_gateway_management_client,
+            session_id=session_id,
+            connection_id=connection_id,
+            connection_table=connection_table
+        )
+        stream_to_connections.get_connection_ids(
+            connection_table=connection_table,
+            session_id=session_id
+        )
+        stream_to_connections(message=message['msg'])
 
         # Add new users to session
-        if 'users' in body:
-            new_user_bios_json = await session_operations.update_bios_as_needed(table, llm_client, body, session, stream_to_connections)
-            if len(new_user_bios_json) == 0:
-                user_bios_json = [session['UserBios'][character] for character in session['UserBios'].keys()]
-                bios_text = prompt_helper.transform_to_html(user_bios_json)
+        new_user_bios_dict_list = None
+        if 'users' in message:
+            new_user_bios_dict_list = session_operations.update_bios_as_needed(
+                session_table=session_table,
+                llm_client=llm_client,
+                body=message,
+                session=session,
+                stream_to_connections=stream_to_connections
+            )
+            if len(new_user_bios_dict_list) == 0:
+                user_bios_json = [session['user_bios'][character] for character in session['user_bios'].keys()]
+                bios_text = '\n'.join(user_bios_json)
 
-            if new_user_bios_json:
-                bios_text = prompt_helper.transform_to_html(new_user_bios_json)
-        # if no action, return all stored bios
-        
-        if 'user' not in body or 'msg' not in body:
+            if new_user_bios_dict_list:
+                bios_text = '\n'.join(new_user_bios_dict_list)
+
+        if 'user' not in message or 'msg' not in message:
             return {
                 'statusCode': 200,
                 'body': bios_text,
             }
-
-        dm_response = await session_operations.add_message_to_session(table, llm_client, body, session, stream_to_connections)
-
-        # add new user bios before the response
-        if bios_text:
-            dm_response = f"""
+        segue_text = ""
+        if new_user_bios_dict_list:
+            segue_text = f"""
             I see new members have joined our party: 
+            
             {bios_text}
 
             Now as for that action...
+            """
+            stream_to_connections(message="Now as for that action...")
             
+
+        dm_response = session_operations.add_message_to_session(
+            session_table=session_table,
+            llm_client=llm_client,
+            body=message,
+            session=session,
+            stream_to_connections=stream_to_connections
+        )
+
+        # add new user bios before the response
+        if segue_text:
+            dm_response = f"""
+            {segue_text}
             {dm_response}
             """
 
-        # Return DM response
         response = {
             'statusCode': 200,
-            'body': json.dumps(dm_response.replace("\u2018", "'").replace("\u2019", "'")),
+            'body': json.dumps(dm_response),
         }
        
     except Exception as e:
-        logger.error("Error adding entry", error=str(e), exc_info=e)
+        logger.error(
+            "Error adding entry",
+            error=str(e),
+            exc_info=e
+        )
 
         response = {
-            'statusCode': 500,
+            'statusCode': 200,
             'body': json.dumps({'error': random.choice(prompt_helper.error_responses)}),
         }
 
     return response
 
 
-async def delete_session(table, session_id):
+def delete_session(session_table, session_id, connection_table):
     logger.info("Deleting session")
-    client = prompt_helper.setup_llm()
+    llm_client = prompt_helper.setup_llm()
     try:
         # Retrieve session from DynamoDB
-        session = await table.get_item(Key={'SessionId': session_id})
-        if 'Item' in session:
-            item = session['Item']
-            thread_id = item.get('ThreadId')
+        session = session_operations.get_session(
+            session_table=session_table, 
+            session_id=session_id
+        )
+        if session:
+            thread_id = session.get('ThreadId')
 
             # Delete the OpenAI thread if it exists
             if thread_id:
                 logger.info("Deleting OpenAI thread", thread_id=thread_id)
-                await prompt_helper.delete_thread(client, thread_id)
+                prompt_helper.delete_thread(
+                    llm_client=llm_client,
+                    thread_id=thread_id
+                )
 
             # Delete the session from DynamoDB
             logger.info("Deleting session from DynamoDB")
-            await table.delete_item(Key={'SessionId': session_id})
+            session_operations.delete_session(
+                session_table=session_table,
+                session_id=session_id,
+                connection_table=connection_table
+            )
 
             logger.info("Session deleted successfully")
             response = {
@@ -144,29 +198,60 @@ async def delete_session(table, session_id):
 
 
 class StreamToConnections:  
-    def __init__(self, api_gateway_management_client, connection_id, connection_ids):
+    def __init__(self, api_gateway_management_client, session_id, connection_id, connection_table):
+        self.session_id = session_id
         self.api_gateway_management_client = api_gateway_management_client
         self._connection_id = connection_id
-        self.connection_ids = connection_ids
+        self.connection_table = connection_table
+        self.connection_ids = []
+    
     
     @property
     def connection_id(self):
         return self._connection_id
     
-    async def __call__(self, message):
-        logger.info("Streaming to connections", connection_id=self.connection_id, connection_ids=self.connection_ids)
+    def get_connection_ids(self, connection_table, session_id):
+        self.connection_ids = session_operations.get_connection_ids(
+            connection_table=connection_table,
+            session_id=session_id
+        )
+    
+    def __call__(self, message):
+        # logger.info("Streaming to connections", connection_id=self.connection_id, connection_ids=self.connection_ids)
+
+        # Convert message to bytes
+        if isinstance(message, dict):
+            message_bytes = json.dumps(message).encode('utf-8')
+        elif isinstance(message, str):
+            message_bytes = message.encode('utf-8')
+        elif isinstance(message, list):
+            message_bytes = json.dumps(message).encode('utf-8')
+        elif isinstance(message, int):
+            message_bytes = str(message).encode('utf-8')
+        elif isinstance(message, float):
+            message_bytes = str(message).encode('utf-8')
+        elif isinstance(message, bool):
+            message_bytes = str(message).encode('utf-8')
+        elif isinstance(message, Text):
+            message_bytes = message.value.encode('utf-8')
+        else:
+            message_bytes = str(message).encode('utf-8')
 
         for other_conn_id in self.connection_ids:
             try:
-                if other_conn_id != self._connection_id:
-                    send_response = await self.api_gateway_management_client.post_to_connection(
-                        Data=message, ConnectionId=other_conn_id
-                    )
-            except ClientError:
-                logger.exception("Couldn't post to connection %s.", other_conn_id)
-            except self.api_gateway_management_client.exceptions.GoneException:
-                logger.info("Connection %s is gone, removing.", other_conn_id)
+                # if other_conn_id != self._connection_id:
+                send_response = self.api_gateway_management_client.post_to_connection(
+                    Data=message_bytes, ConnectionId=other_conn_id
+                )
+            except self.api_gateway_management_client.exceptions.GoneException as e:
+                logger.info("Connection %s is gone, removing.", other_conn_id, exc_info=e)
                 try:
-                    await self.table.delete_item(Key={"connection_id": other_conn_id})
-                except ClientError:
-                    logger.exception("Couldn't remove connection %s.", other_conn_id)
+                    session_operations.remove_connection_id_from_session(
+                        connection_table=self.connection_table,
+                        connection_id=other_conn_id
+                    )
+                    self.connection_ids.remove(other_conn_id)
+                except ClientError as e:
+                    logger.exception("Couldn't remove connection %s.", other_conn_id, exc_info=e)
+            except ClientError as e:
+                logger.exception("Couldn't post to connection %s.", other_conn_id, exc_info=e)
