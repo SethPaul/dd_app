@@ -139,22 +139,20 @@ def add_message_to_session(session_table, llm_client, body, session, stream_to_c
         user_action=user_action,
         stream_to_connections=stream_to_connections
     )
+    sent_response = dm_response.replace("\u2018", "'").replace("\u2019", "'")
     dm_dialogue = {
         'user': 'Dungeon Master',
-        'msg': (dm_response
-                    .replace("\u2018", "'")
-                    .replace("\u2019", "'")
-        )
+        'msg': sent_response
     }
     session['dialogue'].append(dm_dialogue)
 
     # Update chat history with assistant's response
-    session['chat_history'].append({'role': 'Dungeon Master', 'content': dm_response})
+    session['chat_history'].append({'role': 'Dungeon Master', 'content': sent_response})
     # Update session in DynamoDB
     session_table.update_item(
         Key={'session_id': session['session_id']}, 
         UpdateExpression='SET dialogue = :dialogue, chat_history = :chat_history', 
         ExpressionAttributeValues={':dialogue': session['dialogue'], ':chat_history': session['chat_history']}
     )
-    return dm_response
+    return sent_response
  
