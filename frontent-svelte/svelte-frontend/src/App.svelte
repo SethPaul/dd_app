@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import { marked } from 'marked';
   import Chat from "./Chat.svelte";
 
   let groupSize = 0;
@@ -66,9 +67,9 @@ She points to a dark, twisted path leading into the forest. The party begins dow
       const response_text = await response.text();
       console.log("Roles setup response:", response_text);
       
-      // Update the story HTML with the received data
+      // Parse the markdown response and convert to HTML
       if (response_text) {
-        storyHtml = response_text;
+        storyHtml = marked.parse(response_text);
       }
       
     } catch (error) {
