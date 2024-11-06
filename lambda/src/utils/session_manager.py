@@ -26,7 +26,9 @@ def get_session(session_table, session_id):
                 'statusCode': 200,
                 'body': json.dumps({
                     'users': session.get('user_set', []),
-                    'dialogue': session.get('dialogue', [])
+                    'chat_history': session.get('chat_history', []),
+                    'user_bios': session.get('user_bios', {})
+
                 })
             }
         else:
@@ -77,7 +79,11 @@ def add_entry(session_table, llm_client, session_id, message, connection_table, 
             connection_table=connection_table,
             session_id=session_id
         )
-        stream_to_connections(message=message['msg'])
+        supplied_message = message.get('msg', None)
+        if supplied_message:
+            if 'user' in message:
+                supplied_message = f"\n\n {message['user']}: {supplied_message} \n\n"
+            stream_to_connections(message=supplied_message)
 
         # Add new users to session
         new_user_bios_dict_list = None

@@ -36,6 +36,7 @@ Resources:
                   - apigateway:ManageConnections
                   - apigateway:PostToConnection
                   - execute-api:ManageConnections
+                  - execute-api:Invoke
                 Resource: "*"
         - PolicyName: LambdaLogsPolicy
           PolicyDocument:

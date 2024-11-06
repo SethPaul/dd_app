@@ -71,7 +71,7 @@ sessions = [
         }
     },
         {
-        "session_id": "post_session_without_msg",
+        "session_id": "test-session-id",
         "payload": {
             "httpMethod": "POST",
             "pathParameters": {"id": "new-session-id"},
@@ -91,7 +91,7 @@ sessions = [
         "session_id": "post_session_existing",
         "payload": {
             "httpMethod": "POST",
-            "pathParameters": {"id": "existing-session-id"},
+            "pathParameters": {"id": "test-session-id"},
             "body": json.dumps({
                 "user": "Hank",
                 "msg": "I charge at the orc with my sword."

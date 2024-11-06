@@ -1,10 +1,12 @@
 import json
+import os
 import structlog
 
 import utils.session_manager as session_manager
 
 logger = structlog.get_logger(__name__)
 
+wss_url = os.getenv("WEBSOCKET_API_URL")
 
 import boto3
 
@@ -27,10 +29,9 @@ def handle_http_request(event, session_table, connection_table, llm_client):
     elif method == 'POST':
         logger.info("Handling POST request")
         body = json.loads(event['body'])
-        endpoint_url = event.get("requestContext", {}).get("domainName")
         stage = event.get("requestContext", {}).get("stage")
         api_gateway_management_client = boto3.client(
-            "apigatewaymanagementapi", endpoint_url=f"https://{endpoint_url}/{stage}"
+            "apigatewaymanagementapi", endpoint_url=f"{wss_url}/{stage}"
         )
         response = session_manager.add_entry(
             session_table=session_table,

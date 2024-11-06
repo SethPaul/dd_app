@@ -5,3 +5,4 @@ PyYAML
 pytest-asyncio
 python-dotenv
 websockets
+mock
