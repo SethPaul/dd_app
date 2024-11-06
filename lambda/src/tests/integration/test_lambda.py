@@ -160,6 +160,7 @@ def test_post_invalid_method():
 def test_post_without_user_or_msg():
     from handler import lambda_handler
     # Arrange
+    sample_session_id = str(uuid.uuid4())
     event = generate_post_event(sample_session_id, sample_body_without_user_or_msg)
 
     # Act
@@ -167,4 +168,19 @@ def test_post_without_user_or_msg():
 
     # Assert
     assert response['statusCode'] == 200
-    
+
+    # Act       
+    response = lambda_handler(generate_get_event(sample_session_id), None)
+
+    # Assert
+    assert response['statusCode'] == 200
+    body = json.loads(response['body'])
+    assert body['users'] == sample_users
+
+    # Act
+    response = lambda_handler(generate_delete_event(sample_session_id), None)
+
+    # Assert
+    assert response['statusCode'] == 200
+    body = json.loads(response['body'])
+    assert body['message'] == 'Session deleted successfully'

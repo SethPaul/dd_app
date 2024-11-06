@@ -100,7 +100,8 @@ def add_entry(session_table, llm_client, session_id, message, connection_table, 
                 bios_text = '\n'.join(user_bios_json)
 
             if new_user_bios_dict_list:
-                bios_text = '\n'.join(new_user_bios_dict_list)
+                user_bios_json = [new_user_bios_dict_list[character] for character in new_user_bios_dict_list.keys()]
+                bios_text = '\n'.join(user_bios_json)
 
         if 'user' not in message or 'msg' not in message:
             return {
