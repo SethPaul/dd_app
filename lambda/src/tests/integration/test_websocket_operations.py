@@ -89,6 +89,12 @@ class TestWebSocketOperations:
                     'connection_id': {'S': 'test-connection-id'},
                     'session_id': {'S': 'test-session-id'}
                 }
+            },
+            {
+                'TableName': 'dd-infra-connections',
+                'Key': {
+                    'connection_id': {'S': 'test-connection-id'}
+                }
             }
         )
 

@@ -27,12 +27,19 @@ def handle_http_request(event, session_table, connection_table, llm_client):
     elif method == 'POST':
         logger.info("Handling POST request")
         body = json.loads(event['body'])
-        domain = event.get("requestContext", {}).get("domainName")
+        endpoint_url = event.get("requestContext", {}).get("domainName")
         stage = event.get("requestContext", {}).get("stage")
         api_gateway_management_client = boto3.client(
-            "apigatewaymanagementapi", endpoint_url=f"https://{domain}/{stage}"
+            "apigatewaymanagementapi", endpoint_url=f"https://{endpoint_url}/{stage}"
         )
-        response = session_manager.add_entry(session_table, llm_client, session_id, body, connection_table, api_gateway_management_client)
+        response = session_manager.add_entry(
+            session_table=session_table,
+            llm_client=llm_client,
+            session_id=session_id,
+            message=body,
+            connection_table=connection_table,
+            api_gateway_management_client=api_gateway_management_client
+        )
     elif method == 'DELETE':
         logger.info("Handling DELETE request")
         response = session_manager.delete_session(session_table, session_id, connection_table)

@@ -3,24 +3,41 @@ import uuid
 from handler import lambda_handler
 import pytest
 
+import os
+import dotenv
+
+dotenv.load_dotenv()
+
 # Sample event templates
 def generate_get_event(session_id):
     return {
         'httpMethod': 'GET',
         'pathParameters': {'id': session_id},
+        'requestContext': {
+            'domainName': os.getenv('DOMAIN'),
+            'stage': os.getenv('STAGE')
+        }
     }
 
 def generate_post_event(session_id, body):
     return {
         'httpMethod': 'POST',
         'pathParameters': {'id': session_id},
-        'body': json.dumps(body)
+        'body': json.dumps(body),
+        'requestContext': {
+            'domainName': os.getenv('DOMAIN'),
+            'stage': os.getenv('STAGE')
+        }
     }
 
 def generate_delete_event(session_id):
     return {
         'httpMethod': 'DELETE',
         'pathParameters': {'id': session_id},
+        'requestContext': {
+            'domainName': os.getenv('DOMAIN'),
+            'stage': os.getenv('STAGE')
+        }
     }
 
 # Mock data
@@ -53,7 +70,9 @@ def test_get_session_not_found():
 
 def test_session_lifecycle():
     # Arrange
-    random_session_id = str(uuid.uuid4())
+    # random_session_id = str(uuid.uuid4())
+    random_session_id = 'test-session-id'
+    
     event = generate_post_event(random_session_id, sample_body)
 
     # Act
