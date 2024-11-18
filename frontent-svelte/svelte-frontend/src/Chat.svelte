@@ -19,6 +19,7 @@
   async function sendMessage() {
     if (selectedRole && message) {
       let chatMessage = { user: selectedRole.toLowerCase(), msg: message };
+      message = "";
 
 
       try {

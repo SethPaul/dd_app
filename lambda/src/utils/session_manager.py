@@ -111,6 +111,7 @@ def add_entry(session_table, llm_client, session_id, message, connection_table, 
         segue_text = ""
         if new_user_bios_dict_list:
             segue_text = f"""
+
             I see new members have joined our party: 
             
             {bios_text}

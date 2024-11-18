@@ -64,9 +64,7 @@ def generate_character_bios(llm_client, users, thread_id, stream_to_connections)
             content=[{"type": "text", "text": json.dumps(users)}]
         )
         additional_instructions="""
-            return the generated character bios in markdown 
-            format with ===================== to mark beginning 
-            and --------------------- to mark end of each character
+            return the generated character bios
         """
         
         # repo
@@ -96,29 +94,32 @@ def split_user_bios(character_text):
     logger.info("Parsing character markdown")
     try:
         if isinstance(character_text, str):
-            # Parse markdown with delimiters
             characters = {}
             current_character = None
             current_content = []
             
             for line in character_text.split('\n'):
-                if line.startswith('====================='):
-                    # Start of new character
+                line = line.strip()
+                if line == '=====================':
+                    # Handle end delimiter
                     if current_character and current_content:
+                        # Replace "^" with actual newlines
                         characters[current_character] = '\n'.join(current_content)
-                    current_content = []
-                elif line.startswith('# '):
-                    # Character name line
-                    current_character = line[2:].split(' - ')[0].strip()
+                        current_character = None
+                        current_content = []
+                elif line == '_____________________':
+                    # Handle start delimiter - wait for next line for character name
+                    continue
+                elif not current_character and line and not line.startswith('_____________________'):
+                    # First non-empty line after delimiter is character name
+                    current_character = line.split()[0]  # Take first word as character name
                     current_content.append(line)
-                elif line.startswith('---------------------'):
-                    # End of character
-                    if current_character and current_content:
-                        characters[current_character] = '\n'.join(current_content)
-                    current_character = None
-                    current_content = []
-                elif current_character:
+                elif current_character and line:
                     current_content.append(line)
+            
+            # Handle the last character if they don't have an end delimiter
+            if current_character and current_content:
+                characters[current_character] = '\n'.join(current_content).replace('^', '')
             
             logger.info("Character markdown parsed successfully")
             return characters
@@ -195,37 +196,36 @@ class EventHandler(AssistantEventHandler):
 # This is not updated automatically. Needs to be updated manually.
 assistant_instructions =  """
 You are a Dungeon Master for a modified Dungeons and Dragons single session campaign. 
-If supplied a list of players and their roles, you supply a brief descriptive character bios in a fantasy RPG setting providing information that aligns with the player's role. This player is in a modified Dungeons and Dragons ad-hoc game. 
+If supplied a list of players and their roles, you supply a brief descriptive character bios in a fantasy RPG setting providing information that aligns with the player's role. 
+This game is a modified Dungeons and Dragons ad-hoc game. It is fine if the players do not stay inside the setting you provide. Be creative and make it interesting.
+ 
 Example request and response:
 Request:
 [{"Seth": "Wizard"}]
 
 Response:
+
+
+_____________________
+Seth the Wizard
+
+A reclusive wizard, shunned by society due to the dark nature of his magical studies. His once-bright robes are now tattered and stained from countless forbidden experiments. Though haunted by his past, he uses his vast knowledge to protect others while fighting his inner darkness.
+
+Role: Spellcaster & Damage Dealer
+
+Combat Abilities:
+- Magic Missile: A basic attack that never misses
+- Shield: Creates a magical barrier for protection
+- Fireball: Powerful area-of-effect fire damage
+
+Key Stats:
+Strength 2 | Dexterity 1 | Constitution 2
+Intelligence 8 | Wisdom 5 | Charisma 6
 =====================
-# Seth - Wizard
-
-## Background
-Seth is a reclusive wizard, shunned by society due to the dark nature of his magical studies. His once-bright robes are now tattered and stained, a testament to the numerous experiments and forbidden spells he has practiced in the shadows. Haunted by the consequences of his thirst for power, he grapples with the duality of his nature—using his vast knowledge to protect the world while battling the darkness that seeks to consume him.
-
-## Role
-Spellcaster/Damage Dealer
-
-## Example Actions
-* **Magic Missile**: A basic attack spell that never misses and deals damage to a single enemy.
-* **Shield**: Seth can cast a magical barrier around himself or an ally, reducing damage taken.
-* **Special Move (Fireball)**: Seth can unleash a powerful explosion of fire, damaging all enemies in a targeted area.
-
-## Stats
-* **Strength**: 2
-* **Dexterity**: 1
-* **Constitution**: 2
-* **Intelligence**: 8
-* **Wisdom**: 5
-* **Charisma**: 6
----------------------
 
 
-the response should be supplied in markdown format with clear CHARACTER_START and CHARACTER_END delimiters for each character
+
+the response should be supplied in a simple text format with clear character start, "_____________________", and character end, "=====================", delimiters for each character
 
 If supplied an action by a user, generate a random dice roll that should be supplied in the response and defines the success or failure of the supplied action. Supply the outcome of the action with any state changes.
 Request:
@@ -234,7 +234,10 @@ Request:
     }
 
 Response:
-'Seth rolls a 3. The orc deflects the fireball with it's shield. The fireball whirls by Hank burning his arm. He won't be able to use that arm anytime soon.'
+Seth rolls a 3.
+
+The orc deflects the fireball with it's shield.
+The fireball whirls by Hank burning his arm. He won't be able to use that arm anytime soon.
 
 
 Title: The Cursed Idol of Black Hollow

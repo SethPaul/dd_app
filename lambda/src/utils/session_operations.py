@@ -96,7 +96,13 @@ def update_bios_as_needed(session_table, llm_client, body, session, stream_to_co
                 new_users.append(user)
     
     if new_users:
-        stream_to_connections(message="I see new members have joined our party:")
+        stream_to_connections(message="""
+                              
+                              
+                              I see new members have joined our party:
+                              
+                              
+                              """)
         new_user_bios_dict_list =  prompt_helper.generate_character_bios(
                 llm_client=llm_client,
                 thread_id=session['thread_id'],
