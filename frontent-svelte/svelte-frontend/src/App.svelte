@@ -14,10 +14,54 @@
   let currentSentence = "";
   let currentStoryHTML = "";
 
+  async function fetchSessionData(sessionId) {
+    try {
+      const response = await fetch(`${backendUrl}/${sessionId}`, {
+
+        headers: { 
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Headers": "*",
+        },
+      });
+      if (!response.ok) {
+        throw new Error('Session not found');
+      }
+      const data = await response.json();
+      // Update storyHtml with previous messages instead of wsMessages
+      if (data.users) {
+        group = data.users;
+        isSetupComplete = true; 
+      }
+      if (data.user_bios) {
+        currentStoryHTML = "Your party members are: <br><br>" + marked.parse(Object.values(data.user_bios).join('\n\n_____________________\n\n\n\n_____________________\n\n')) + "<br><br>" + currentStoryHTML;
+        storyHtml = currentStoryHTML;
+      }
+      if (data.chat_history) {
+        data.chat_history.forEach(message => {
+          if (message.role === 'user') {
+            currentStoryHTML += `<p><span class="user-name">${message.content.charAt(0).toUpperCase() + message.content.slice(1)}</span></p>`;
+            storyHtml = currentStoryHTML;
+          } else {
+            currentStoryHTML += `<p><span class="ai-name">Dungeon Master: ${message.content.charAt(0).toUpperCase() + message.content.slice(1)}</span></p>`;
+            storyHtml = currentStoryHTML;
+          }
+          scrollToBottom();
+        });
+      }
+      scrollToBottom();
+    } catch (error) {
+      console.error('Error fetching session:', error);
+    }
+  }
   // Generate random session ID and update URL
   onMount(async () => {
     const urlParams = new URLSearchParams(window.location.search);
     const urlSessionId = urlParams.get('session');
+    
+    if (urlSessionId) {      
+      await fetchSessionData(urlSessionId);
+    }
     
     // Use existing session ID from URL if available, otherwise generate new one
     sessionId = urlSessionId || Math.random().toString(36).substring(2, 15);
