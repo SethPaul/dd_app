@@ -1,19 +1,29 @@
 import json
 import openai
 import os
-import boto3
-from openai import OpenAI
+import aioboto3
+from openai import OpenAI, AssistantEventHandler
 import structlog
 import random
+import boto3
+
+from typing_extensions import override
 
 logger = structlog.get_logger(__name__)
 
 ASSISTANT_ID = os.getenv('ASSISTANT_ID', 'asst_JVSlwnmtTuU58GOrCkD9x11b')
 
+domain = os.getenv('DOMAIN')
+stage = os.getenv('STAGE')
+apig_session = aioboto3.Session()
+apig_management_client = apig_session.client(
+    "apigatewaymanagementapi", endpoint_url=f"https://{domain}/{stage}"
+)
+
 # One time creation of the assistant
-def create_assistant(client):
+def create_assistant(llm_client):
     logger.info("Creating assistant")
-    assistant = client.beta.assistants.create(
+    assistant = llm_client.beta.assistants.create(
         name="Dungeon Master",
         instructions=assistant_instructions,
         model="gpt-4o-mini",
@@ -21,9 +31,9 @@ def create_assistant(client):
     logger.info("Created assistant", assistant_id=assistant.id)
     return assistant.id
 
-def create_thread(client):
+def create_thread(llm_client):
     logger.info("Creating thread")
-    thread = client.beta.threads.create()
+    thread = llm_client.beta.threads.create()
     logger.info("Thread created", thread_id=thread.id)
     return thread.id
 
@@ -34,158 +44,200 @@ def setup_llm():
     try:
         response = secret_client.get_secret_value(SecretId='dd_open_ai_key')
         openai.api_key = response["SecretString"]
-        client = OpenAI(api_key=response["SecretString"])
+        llm_client = OpenAI(api_key=response["SecretString"])
         logger.info("LLM setup completed")
-        return client
+        return llm_client
     except Exception as e:
         logger.error("Error setting up LLM", error=str(e))
         raise
 
-def generate_character_bios(client, users, thread_id):
+def generate_character_bios(llm_client, users, thread_id, stream_to_connections):
     logger.info("Generating character bios", users=users, thread_id=thread_id)
     if not users:
         logger.warning("No users provided for character bio generation")
         return {}
     
     try:
-        message = client.beta.threads.messages.create(
+        message = llm_client.beta.threads.messages.create(
             thread_id=thread_id,
             role="user",
             content=[{"type": "text", "text": json.dumps(users)}]
         )
-
-        run = client.beta.threads.runs.create_and_poll(
+        additional_instructions="""
+            return the generated character bios
+        """
+        
+        # repo
+        with llm_client.beta.threads.runs.stream(
             thread_id=thread_id,
             assistant_id=ASSISTANT_ID,
-            additional_instructions="return the generated character bios in a json object list with an object for each supplied user"
-        )
+            additional_instructions=additional_instructions,
+            event_handler=EventHandler(stream_to_connections),
 
-        if run.status == 'completed':
-            messages = client.beta.threads.messages.list(thread_id=thread_id)
-            response_text = messages.data[0].content[0].text.value
-            logger.info("Character bios generated successfully")
-            try:
-                bios_dict = json.loads(response_text)
-                return bios_dict['characters']
-            except json.JSONDecodeError:
-                logger.warning("Invalid JSON response for character bios", response=response_text)
-                return response_text
-        else:
-            logger.error("Character bio generation failed", status=run.status)
-            return {}
+        ) as stream:
+            stream.until_done()
+
+        messages = llm_client.beta.threads.messages.list(thread_id=thread_id)
+        response_text = messages.data[0].content[0].text.value
+        logger.info("Character bios generated successfully")
+        try:
+            bios_dict_list = split_user_bios(response_text)
+            return bios_dict_list
+        except Exception as e:
+            logger.warning("Invalid markdown response for character bios", response=response_text)
+            return response_text
     except Exception as e:
         logger.error("Error generating character bios", error=str(e))
         raise
 
-def transform_to_html(character_json):
-    logger.info("Transforming character JSON to HTML")
+def split_user_bios(character_text):
+    logger.info("Parsing character markdown")
     try:
-        html = ""
-        for character in character_json:
-            try:
-                html += f"<h1>{character['name']} - {character['role']}</h1>\n"
-                html += f"<h2>Background</h2>\n<p>{character['background']}</p>\n"
-                html += f"<h2>Role</h2>\n<p>{character['role_description']}</p>\n"
-                
-                html += "<h2>Example Actions</h2>\n<ul>\n"
-                for action, description in character['example_actions'].items():
-                    html += f"<li><strong>{action.replace('_', ' ').title()}</strong>: {description}</li>\n"
-                html += "</ul>\n"
-                
-                html += "<h2>Stats</h2>\n<ul>\n"
-                for stat, value in character['stats'].items():
-                    html += f"<li><strong>{stat}</strong>: {value}</li>\n"
-                html += "</ul>\n"
-                
-                logger.info("Character JSON transformed to HTML successfully")
-                html += "<hr>\n"
-            except KeyError as e:
-                logger.error("Error transforming character JSON to HTML", error=str(e), character_json=character)
-                # raise
-        return html
-    except KeyError as e:
-        logger.error("Error transforming character JSON to HTML", error=str(e), character_json=character_json)
+        if isinstance(character_text, str):
+            characters = {}
+            current_character = None
+            current_content = []
+            
+            for line in character_text.split('\n'):
+                line = line.strip()
+                if line == '=====================':
+                    # Handle end delimiter
+                    if current_character and current_content:
+                        # Replace "^" with actual newlines
+                        characters[current_character] = '\n'.join(current_content)
+                        current_character = None
+                        current_content = []
+                elif line == '_____________________':
+                    # Handle start delimiter - wait for next line for character name
+                    continue
+                elif not current_character and line and not line.startswith('_____________________'):
+                    # First non-empty line after delimiter is character name
+                    current_character = line.split()[0]  # Take first word as character name
+                    current_content.append(line)
+                elif current_character and line:
+                    current_content.append(line)
+            
+            # Handle the last character if they don't have an end delimiter
+            if current_character and current_content:
+                characters[current_character] = '\n'.join(current_content).replace('^', '')
+            
+            logger.info("Character markdown parsed successfully")
+            return characters
+        else:
+            logger.warning("Received JSON format instead of markdown")
+            return {}
+            
+    except Exception as e:
+        logger.error("Error parsing character content", error=str(e))
         raise
 
-def process_action(client, thread_id, action):
-    logger.info("Processing action", thread_id=thread_id, action=action)
+def process_action(llm_client, thread_id, user_action, stream_to_connections):
+    logger.info("Processing action", thread_id=thread_id, action=user_action)
     try:
-        message = client.beta.threads.messages.create(
+        message = llm_client.beta.threads.messages.create(
             thread_id=thread_id,
             role="user",
-            content=[{"type": "text", "text": json.dumps(action)}]
+            content=[{"type": "text", "text": json.dumps(user_action)}]
         )
-
-        run = client.beta.threads.runs.create_and_poll(
+        with llm_client.beta.threads.runs.stream(
             thread_id=thread_id,
-            assistant_id=ASSISTANT_ID
-        )
-
-        if run.status == 'completed':
-            messages = client.beta.threads.messages.list(thread_id=thread_id)
-            assistant_reply = json.loads(messages.data[0].content[0].text.value)
-            logger.info("Action processed successfully")
-            return assistant_reply['msg']
-        else:
-            logger.error("Action processing failed", status=run.status)
-            
-            return 'Some evil force muddled my mind. Please try again.'
+            assistant_id=ASSISTANT_ID,
+            event_handler=EventHandler(stream_to_connections),
+        ) as stream:
+            stream.until_done()
+        
+        messages = llm_client.beta.threads.messages.list(thread_id=thread_id)
+        assistant_reply = messages.data[0].content[0].text.value
+        logger.info("Action processed successfully")
+        return assistant_reply
     except Exception as e:
         logger.error("Error processing action", error=str(e))
         return random.choice(error_responses)
 
-def delete_thread(client, thread_id):
+def delete_thread(llm_client, thread_id):
     logger.info("Deleting thread", thread_id=thread_id)
     try:
-        client.beta.threads.delete(thread_id)
+        llm_client.beta.threads.delete(thread_id)
         logger.info("Thread deleted successfully", thread_id=thread_id)
     except Exception as e:
         logger.error("Error deleting thread", thread_id=thread_id, error=str(e))
         raise
 
+class EventHandler(AssistantEventHandler):
+    def __init__(self, stream_to_connections):
+        super().__init__()
+        self.stream_to_connections = stream_to_connections
+
+    @override
+    def on_text_created(self, text) -> None:
+        self.stream_to_connections(text)
+
+    @override
+    def on_text_delta(self, delta, snapshot):
+        self.stream_to_connections(delta.value)
+      
+    @override
+    def on_tool_call_created(self, tool_call):
+        self.stream_to_connections(f"\nassistant > {tool_call.type}\n")
+  
+    @override
+    def on_tool_call_delta(self, delta, snapshot):
+        if delta.type == 'code_interpreter':
+            if delta.code_interpreter.input:
+                self.stream_to_connections(delta.code_interpreter.input)
+            if delta.code_interpreter.outputs:
+                self.stream_to_connections(f"\n\noutput >")
+                for output in delta.code_interpreter.outputs:
+                    if output.type == "logs":
+                        self.stream_to_connections(f"\n{output.logs}")
+
+
 # The assistant_instructions variable remains unchanged
+# This is not updated automatically. Needs to be updated manually.
 assistant_instructions =  """
 You are a Dungeon Master for a modified Dungeons and Dragons single session campaign. 
-If supplied a list of players and their roles, you supply a brief descriptive character bios in a fantasy RPG setting providing information that aligns with the player's role. This player is in a modified Dungeons and Dragons ad-hoc game. 
+If supplied a list of players and their roles, you supply a brief descriptive character bios in a fantasy RPG setting providing information that aligns with the player's role. 
+This game is a modified Dungeons and Dragons ad-hoc game. It is fine if the players do not stay inside the setting you provide. Be creative and make it interesting.
+ 
 Example request and response:
 Request:
 [{"Seth": "Wizard"}]
 
 Response:
-{
-  "characters": [
-    {
-      "name": "Seth",
-      "role": "Wizard",
-      "background": "Seth is a reclusive wizard, shunned by society due to the dark nature of his magical studies. His once-bright robes are now tattered and stained, a testament to the numerous experiments and forbidden spells he has practiced in the shadows. Haunted by the consequences of his thirst for power, he grapples with the duality of his nature—using his vast knowledge to protect the world while battling the darkness that seeks to consume him.",
-      "role_description": "Spellcaster/Damage Dealer",
-      "example_actions": {
-        "magic_missile": "Magic Missile - A basic attack spell that never misses and deals damage to a single enemy.",
-        "shield": "Shield - Seth can cast a magical barrier around himself or an ally, reducing damage taken.",
-        "special_move": "Fireball - Seth can unleash a powerful explosion of fire, damaging all enemies in a targeted area."
-      },
-      "stats": {
-        "Strength": 2,
-        "Dexterity": 1,
-        "Constitution": 2,
-        "Intelligence": 8,
-        "Wisdom": 5,
-        "Charisma": 6
-      }
-    }
-  ]
-}
 
-the response should be supplied in a json object list with an object for each supplied user
 
-If supplied an action by a user,  generate a random dice roll that should be supplied in the response and defines the success or failure of the supplied action. Supply the outcome of the action with any state changes.
+_____________________
+Seth the Wizard
+
+A reclusive wizard, shunned by society due to the dark nature of his magical studies. His once-bright robes are now tattered and stained from countless forbidden experiments. Though haunted by his past, he uses his vast knowledge to protect others while fighting his inner darkness.
+
+Role: Spellcaster & Damage Dealer
+
+Combat Abilities:
+- Magic Missile: A basic attack that never misses
+- Shield: Creates a magical barrier for protection
+- Fireball: Powerful area-of-effect fire damage
+
+Key Stats:
+Strength 2 | Dexterity 1 | Constitution 2
+Intelligence 8 | Wisdom 5 | Charisma 6
+=====================
+
+
+
+the response should be supplied in a simple text format with clear character start, "_____________________", and character end, "=====================", delimiters for each character
+
+If supplied an action by a user, generate a random dice roll that should be supplied in the response and defines the success or failure of the supplied action. Supply the outcome of the action with any state changes.
 Request:
     {'user': 'Seth',
     'msg': 'I cast a fireball at the orc.'
     }
 
 Response:
-{'user': 'system', 'msg': 'Seth rolls a 3. The orc deflects the fireball with it's shield. The fireball whirls by Hank burning his arm. He won't be able to use that arm anytime soon.'}
+Seth rolls a 3.
+
+The orc deflects the fireball with it's shield.
+The fireball whirls by Hank burning his arm. He won't be able to use that arm anytime soon.
 
 
 Title: The Cursed Idol of Black Hollow

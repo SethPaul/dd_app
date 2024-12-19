@@ -3,6 +3,11 @@ Transform:
   - AWS::Serverless-2016-10-31
 Description: Lambda function and API Gateway setup for D&D Dungeon Master backend.
 
+Parameters:
+  WebSocketApiUrl:
+    Type: String
+    Description: The URL of the API Gateway WebSocket API.
+
 
 Resources:
   LambdaExecutionRole:
@@ -23,7 +28,15 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:UpdateItem                  
                   - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                  - apigateway:ManageConnections
+                  - apigateway:PostToConnection
+                  - execute-api:ManageConnections
+                  - execute-api:Invoke
                 Resource: "*"
         - PolicyName: LambdaLogsPolicy
           PolicyDocument:
@@ -56,3 +69,6 @@ Resources:
       Timeout: 300
       AutoPublishAlias: "staged"
       AutoPublishAliasAllProperties: true
+      Environment:
+        Variables:
+          WEBSOCKET_API_URL: !Ref WebSocketApiUrl

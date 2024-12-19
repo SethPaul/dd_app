@@ -3,10 +3,14 @@ import json
 import os
 import structlog
 import requests
+from dotenv import load_dotenv
 
 import pytest
 import yaml
 from pytest import param
+
+# Load environment variables from .env file
+load_dotenv()
 
 with open(f"{os.path.dirname(__file__)}/../../../samconfig.yaml", "rb") as f:
     samconfig_dict = yaml.safe_load(f)
@@ -14,7 +18,7 @@ with open(f"{os.path.dirname(__file__)}/../../../samconfig.yaml", "rb") as f:
 logger = structlog.get_logger()
 
 DEPLOY_ENV = os.getenv("DEPLOY_ENV", "default")
-API_URL = os.getenv("API_URL", "<API_URL>")
+API_URL = os.getenv("API_URL", "<API_URL>")  # This will now pull from .env file
 
 sessions = [
     {
@@ -23,13 +27,18 @@ sessions = [
             "httpMethod": "GET",
             "pathParameters": {"id": "test-session-id"},
         },
-        "expected_body": json.dumps({
+        "expected_response": {
+            "body":json.dumps({
             "users": [
                 {"name": "Seth", "role": "Wizard"},
                 {"name": "Hank", "role": "Warrior"}
             ],
             "dialogue": []
-        })
+            }),
+            "statusCode": 200
+        }
+        
+
     },
     {
         "session_id": "get_session_not_found",
@@ -37,7 +46,10 @@ sessions = [
             "httpMethod": "GET",
             "pathParameters": {"id": "non-existent-session"},
         },
-        "expected_body": json.dumps({"error": "Session not found"})
+        "expected_response": {
+            "body": json.dumps({"error": "Session not found"}),
+            "statusCode": 404
+        }
     },
     {
         "session_id": "post_session_new",
@@ -53,10 +65,13 @@ sessions = [
                 "msg": "I cast a fireball at the orc."
             })
         },
-        "expected_body": '"The orc is engulfed in flames."'  # This is a placeholder. Actual response will vary.
+        "expected_response": {
+            "body": '"The orc is engulfed in flames."',  # This is a placeholder. Actual response will vary.
+            "statusCode": 200
+        }
     },
         {
-        "session_id": "post_session_without_msg",
+        "session_id": "test-session-id",
         "payload": {
             "httpMethod": "POST",
             "pathParameters": {"id": "new-session-id"},
@@ -67,19 +82,25 @@ sessions = [
                 ],
             })
         },
-        "expected_body": '"Something about each user"'  # This is a placeholder. Actual response will vary.
+        "expected_response": {
+            "body": '"Something about each user"',  # This is a placeholder. Actual response will vary.
+            "statusCode": 200
+        }
     },
     {
         "session_id": "post_session_existing",
         "payload": {
             "httpMethod": "POST",
-            "pathParameters": {"id": "existing-session-id"},
+            "pathParameters": {"id": "test-session-id"},
             "body": json.dumps({
                 "user": "Hank",
                 "msg": "I charge at the orc with my sword."
             })
         },
-        "expected_body": '"You slash the orc, and it falls defeated."'  # This is a placeholder. Actual response will vary.
+        "expected_response": {
+            "body": '"You slash the orc, and it falls defeated."',  # This is a placeholder. Actual response will vary.
+            "statusCode": 200
+        }
     },
     {
         "session_id": "post_invalid_method",
@@ -87,7 +108,10 @@ sessions = [
             "httpMethod": "PUT",
             "pathParameters": {"id": "test-session-id"},
         },
-        "expected_body": json.dumps({"error": "Method not allowed"})
+        "expected_response": {
+            "body": json.dumps({"error": "Method not allowed"}),
+            "statusCode": 200
+        }
     },
     {
         "session_id": "post_missing_parameters",
@@ -96,7 +120,10 @@ sessions = [
             "pathParameters": {"id": "test-session-id"},
             "body": json.dumps({"msg": "I look around."})
         },
-        "expected_body": json.dumps({"error": "KeyError: 'user'"})  # Assuming this is the error message when 'user' is missing
+        "expected_response": {
+            "body": json.dumps({"error": "KeyError: 'user'"}),  # Assuming this is the error message when 'user' is missing
+            "statusCode": 200
+        }
     }
 ]
 
@@ -123,6 +150,6 @@ def test_api(session):
                 content=response.text,
                 session_id=session['session_id'])
     
-    assert response.status_code == 200, f"Unexpected status code for session {session['session_id']}"
+    assert response.status_code == session['expected_response']['statusCode'], f"Unexpected status code for session {session['session_id']}"
     
     logger.info(f"response.text: {response.text}")

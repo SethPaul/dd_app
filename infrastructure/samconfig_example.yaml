@@ -12,6 +12,7 @@ api_gateway:
       parameter_overrides:
         LambdaFunctionName=<your lambda function name>
         LambdaFunctionArn=arn:aws:lambda:<your region>:<your account id>:function:<your lambda function name>
+        LambdaExecutionRoleName=<your lambda execution role name>
       capabilities: CAPABILITY_NAMED_IAM
       image_repositories: []
 
