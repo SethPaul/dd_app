@@ -115,6 +115,25 @@
       }
     }
   }
+
+  function removePerson(index) {
+    group = group.filter((_, i) => i !== index);
+    if (group.length === 0) {
+      isSetupComplete = false;
+      currentPerson = 0;
+      groupSize = 0;
+    }
+  }
+
+  function editPerson(index) {
+    const person = group[index];
+    name = person.name;
+    role = person.role;
+    removePerson(index);
+    currentPerson--;
+    if (currentPerson < 0) currentPerson = 0;
+  }
+
   let initialStoryHtml = `<p>The air is thick with fog as you and your fellow adventurers step into the village of Black Hollow. The sun barely penetrates the gloom, casting everything in an eerie, shadowy light. You can feel the eyes of the villagers on you—wary, fearful, but also hopeful.
     <br>
     <br>
@@ -172,73 +191,282 @@
     <title>The Cursed Idol of Black Hollow</title>
 </svelte:head> 
 
-<main>
-	<h2>Hi 👋 Saga Product Team!</h2>
-	<h1>Welcome to The Cursed Idol of Black Hollow <br> 🪄🌑🖤✨👻🌌</h1>
-  <p>Session ID: {sessionId}</p>
-  <br>
-	<div class="story-container">
-		{@html storyHtml}
-	</div>
-	<br>
-	{#if !isSetupComplete}
-		<div class="container">
-			<h2>Enter the number of people in your group:</h2>
-			<input class="member-number" type="number" bind:value={groupSize} />
+<div class="app-container">
+  <main class="main-content">
+    <h2>Hi 👋 Saga Product Team!</h2>
+    <h1>Welcome to The Cursed Idol of Black Hollow <br> 🪄🌑🖤✨👻🌌</h1>
+    <p>Session ID: {sessionId}</p>
+    <br>
+    <div class="story-container">
+      {@html storyHtml}
+    </div>
+    <br>
+    {#if !isSetupComplete}
+      <div class="container">
+        <h2>Enter the number of people in your group:</h2>
+        <input class="member-number" type="number" bind:value={groupSize} />
 
-			{#if groupSize > 0 && currentPerson < groupSize}
-				<h2>Enter Name and Role for Person {currentPerson + 1}</h2>
-				<input type="text" placeholder="Name" bind:value={name} />
-				<input type="text" placeholder="Role" bind:value={role} />
-				<button on:click={addPerson}>Add Person</button>
-			{/if}
-		</div>
-	{:else}
-		<!-- Once group setup is done, move to chat -->
-		<Chat {group} sessionId={sessionId} />
-	{/if}
-</main>
+        {#if groupSize > 0 && currentPerson < groupSize}
+          <h2>Enter Name and Role for Person {currentPerson + 1}</h2>
+          <input type="text" placeholder="Name" bind:value={name} />
+          <input type="text" placeholder="Role" bind:value={role} />
+          <button on:click={addPerson}>Add Person</button>
+        {/if}
+      </div>
+    {:else}
+      <!-- Once group setup is done, move to chat -->
+      <Chat {group} sessionId={sessionId} />
+    {/if}
+  </main>
+
+  <aside class="party-panel">
+    <div class="party-header">
+      <h3>🎭 Party Management</h3>
+    </div>
+    
+    <div class="party-content">
+      {#if group.length > 0}
+        <div class="party-members">
+          <h4>Current Party ({group.length} members)</h4>
+          {#each group as person, index}
+            <div class="party-member">
+              <div class="member-info">
+                <span class="member-name">{person.name}</span>
+                <span class="member-role">{person.role}</span>
+              </div>
+              <div class="member-actions">
+                <button class="edit-btn" on:click={() => editPerson(index)} title="Edit">✏️</button>
+                <button class="remove-btn" on:click={() => removePerson(index)} title="Remove">🗑️</button>
+              </div>
+            </div>
+          {/each}
+        </div>
+      {:else}
+        <div class="empty-party">
+          <p>No party members yet</p>
+          <p>Add members to start your adventure!</p>
+        </div>
+      {/if}
+
+      {#if isSetupComplete}
+        <div class="party-stats">
+          <h4>Party Stats</h4>
+          <div class="stat-item">
+            <span class="stat-label">Total Members:</span>
+            <span class="stat-value">{group.length}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Session ID:</span>
+            <span class="stat-value">{sessionId}</span>
+          </div>
+        </div>
+      {/if}
+
+      <div class="party-actions">
+        {#if isSetupComplete}
+          <button class="action-btn" on:click={() => { isSetupComplete = false; currentPerson = group.length; }}>
+            Add More Members
+          </button>
+        {/if}
+        <button class="action-btn secondary" on:click={() => { group = []; isSetupComplete = false; currentPerson = 0; groupSize = 0; }}>
+          Reset Party
+        </button>
+      </div>
+    </div>
+  </aside>
+</div>
 
 <style>
-  main {
-    position: absolute;           /* Allows for positioning the element relative to the body */
-    top: 50%;                    /* Position it 50% from the top */
-    left: 50%;                   /* Position it 50% from the left */
-    transform: translate(-50%, -50%); /* Shift the element back by half its height and width */
-    text-align: center;          /* Center the text inside the main element */
-    padding: 1em;                /* Add padding */
-    max-width: 80vw;            /* Set max width */
-    background: #F3F4F4;         /* Background color */
-    font-family: 'Montserrat', sans-serif; /* Font family */
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); /* Optional: adds a subtle shadow */
-    border-radius: 10px;
-    padding: 30px;
-    width: 80%;
-    margin: 0 auto;
+  .app-container {
+    display: flex;
+    min-height: 100vh;
+    background: #f5f5f5;
+    font-family: 'Montserrat', sans-serif;
   }
+
+  .main-content {
+    flex: 1;
+    padding: 2rem;
+    background: #F3F4F4;
+    margin: 1rem;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    overflow-y: auto;
+  }
+
+  .party-panel {
+    width: 350px;
+    background: white;
+    border-left: 1px solid #e0e0e0;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.1);
+  }
+
+  .party-header {
+    background: linear-gradient(to right, rgba(255, 89, 90, 0.8), rgba(110, 211, 75, 0.8), rgba(30, 206, 202, 0.8), rgba(0, 98, 152, 0.8));
+    color: white;
+    padding: 1rem;
+    text-align: center;
+  }
+
+  .party-header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+    font-weight: bold;
+  }
+
+  .party-content {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+  }
+
+  .party-members h4 {
+    color: rgba(0, 98, 152);
+    margin-bottom: 1rem;
+    font-size: 1rem;
+  }
+
+  .party-member {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .member-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  .member-name {
+    font-weight: bold;
+    color: rgba(0, 98, 152);
+    font-size: 0.9rem;
+  }
+
+  .member-role {
+    color: #666;
+    font-size: 0.8rem;
+    font-style: italic;
+  }
+
+  .member-actions {
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .edit-btn, .remove-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+  }
+
+  .edit-btn:hover {
+    background: #e3f2fd;
+  }
+
+  .remove-btn:hover {
+    background: #ffebee;
+  }
+
+  .empty-party {
+    text-align: center;
+    color: #666;
+    padding: 2rem 1rem;
+  }
+
+  .empty-party p {
+    margin: 0.5rem 0;
+  }
+
+  .party-stats {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  .party-stats h4 {
+    color: rgba(0, 98, 152);
+    margin-bottom: 0.75rem;
+    font-size: 1rem;
+  }
+
+  .stat-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+    font-size: 0.85rem;
+  }
+
+  .stat-label {
+    color: #666;
+  }
+
+  .stat-value {
+    font-weight: bold;
+    color: rgba(0, 98, 152);
+  }
+
+  .party-actions {
+    margin-top: 1.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e0e0e0;
+  }
+
+  .action-btn {
+    width: 100%;
+    padding: 0.75rem;
+    margin-bottom: 0.5rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 0.85rem;
+    background: linear-gradient(to right, rgba(255, 89, 90, 0.8), rgba(110, 211, 75, 0.8), rgba(30, 206, 202, 0.8), rgba(0, 98, 152, 0.8));
+    color: white;
+    transition: opacity 0.2s;
+  }
+
+  .action-btn:hover {
+    opacity: 0.9;
+  }
+
+  .action-btn.secondary {
+    background: #6c757d;
+  }
+
   .container {
-    background: linear-gradient(to right, rgba(255, 89, 90, 0.5), rgba(110, 211, 75, 0.5), rgba(30, 206, 202, 0.5), rgba(0, 98, 152, 0.5)); /* Adjust alpha (0.7) as needed */
+    background: linear-gradient(to right, rgba(255, 89, 90, 0.5), rgba(110, 211, 75, 0.5), rgba(30, 206, 202, 0.5), rgba(0, 98, 152, 0.5));
     border-radius: 10px;
     padding: 10px;
     margin-top: 50px;
   }
-	h1 {	
-		text-transform: uppercase;
-	}
-	h1, h2 {
-		margin: 20px;
-		color: rgba(0, 98, 152);
-	}
+
+  h1 {	
+    text-transform: uppercase;
+  }
+
+  h1, h2 {
+    margin: 20px;
+    color: rgba(0, 98, 152);
+  }
+
   .member-number {
     margin-top: 20px;
     border-radius: 10px;
     width: 50px;
   }
-	@media (min-width: 640px) {
-		main {
-			max-width: none;
-		}
-	}
 
   .story-container {
     max-height: 300px;
@@ -257,5 +485,23 @@
 
   .story-container :global(p:last-child) {
     margin-bottom: 0;
+  }
+
+  /* Responsive design */
+  @media (max-width: 768px) {
+    .app-container {
+      flex-direction: column;
+    }
+    
+    .party-panel {
+      width: 100%;
+      max-height: 300px;
+      border-left: none;
+      border-top: 1px solid #e0e0e0;
+    }
+    
+    .main-content {
+      margin: 0.5rem;
+    }
   }
 </style>
